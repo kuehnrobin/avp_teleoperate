@@ -20,8 +20,8 @@ class TeleVision:
             self.img_width  = img_shape[1]
 
         if ngrok:
-            self.vuer = Vuer(host='0.0.0.0', queries=dict(grid=False), queue_len=3)
-        else:
+            self.vuer = Vuer(host='0.0.0.0', queries=dict(grid=False), queue_len=3) #Change here for Quest
+        else: 
             self.vuer = Vuer(host='0.0.0.0', cert=cert_file, key=key_file, queries=dict(grid=False), queue_len=3)
 
         self.vuer.add_handler("HAND_MOVE")(self.on_hand_move)
@@ -29,7 +29,7 @@ class TeleVision:
 
         existing_shm = shared_memory.SharedMemory(name=img_shm_name)
         self.img_array = np.ndarray(img_shape, dtype=np.uint8, buffer=existing_shm.buf)
-
+ 
         if binocular:
             self.vuer.spawn(start=False)(self.main_image_binocular)
         else:

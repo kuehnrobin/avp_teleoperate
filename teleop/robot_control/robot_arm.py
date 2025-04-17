@@ -7,6 +7,7 @@ from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber, Cha
 from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowCmd_, LowState_                                 # idl
 from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
 from unitree_sdk2py.utils.crc import CRC
+from unitree_sdk2py.g1.audio.g1_audio_client import AudioClient
 
 kTopicLowCommand = "rt/lowcmd"
 kTopicLowState = "rt/lowstate"
@@ -45,7 +46,7 @@ class DataBuffer:
             self.data = data
 
 class G1_29_ArmController:
-    def __init__(self):
+    def __init__(self, networkInterface='enxa0cec8616f27'):
         print("Initialize G1_29_ArmController...")
         self.q_target = np.zeros(14)
         self.tauff_target = np.zeros(14)
@@ -66,7 +67,7 @@ class G1_29_ArmController:
         self._gradual_time = None
 
         # initialize lowcmd publisher and lowstate subscriber
-        ChannelFactoryInitialize(0)
+        ChannelFactoryInitialize(0, networkInterface)
         self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand, LowCmd_)
         self.lowcmd_publisher.Init()
         self.lowstate_subscriber = ChannelSubscriber(kTopicLowState, LowState_)
@@ -78,8 +79,23 @@ class G1_29_ArmController:
         self.subscribe_thread.daemon = True
         self.subscribe_thread.start()
 
+        ## Debug by Robin
+        audio_client = AudioClient()  
+        audio_client.SetTimeout(10.0)
+        audio_client.Init()
+        ret = audio_client.GetVolume()
+        print("debug GetVolume: ",ret)
+
+        audio_client.SetVolume(85)
+
+        ret = audio_client.GetVolume()
+        print("debug GetVolume: ",ret)
+        audio_client.TtsMaker("大家好!我是宇树科技人形机器人。语音开发测试例程运行成功！ 很高兴认识你！",0)
+        time.sleep(8)
+        ## Debug Ende
+        # Todo: Warum sendet der Roboter nicht seine gelenkdaten?
         while not self.lowstate_buffer.GetData():
-            time.sleep(0.01)
+            time.sleep(0.1)
             print("[G1_29_ArmController] Waiting to subscribe dds...")
 
         # initialize hg's lowcmd msg
@@ -309,7 +325,7 @@ class G1_29_JointIndex(IntEnum):
     kNotUsedJoint5 = 34
 
 class G1_23_ArmController:
-    def __init__(self):
+    def __init__(self, networkInterface='enxa0cec8616f27'):
         print("Initialize G1_23_ArmController...")
         self.q_target = np.zeros(10)
         self.tauff_target = np.zeros(10)
@@ -330,7 +346,7 @@ class G1_23_ArmController:
         self._gradual_time = None
 
         # initialize lowcmd publisher and lowstate subscriber
-        ChannelFactoryInitialize(0)
+        ChannelFactoryInitialize(0, networkInterface)
         self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand, LowCmd_)
         self.lowcmd_publisher.Init()
         self.lowstate_subscriber = ChannelSubscriber(kTopicLowState, LowState_)
@@ -565,7 +581,7 @@ class G1_23_JointIndex(IntEnum):
     kNotUsedJoint5 = 34
 
 class H1_2_ArmController:
-    def __init__(self):
+    def __init__(self, networkInterface='enxa0cec8616f27'):
         print("Initialize H1_2_ArmController...")
         self.q_target = np.zeros(14)
         self.tauff_target = np.zeros(14)
@@ -586,7 +602,7 @@ class H1_2_ArmController:
         self._gradual_time = None
 
         # initialize lowcmd publisher and lowstate subscriber
-        ChannelFactoryInitialize(0)
+        ChannelFactoryInitialize(0, networkInterface)
         self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand, LowCmd_)
         self.lowcmd_publisher.Init()
         self.lowstate_subscriber = ChannelSubscriber(kTopicLowState, LowState_)

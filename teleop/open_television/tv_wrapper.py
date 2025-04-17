@@ -64,8 +64,8 @@ under (basis) Robot Convention, hand's initial pose convention:
 """
 
 class TeleVisionWrapper:
-    def __init__(self, binocular, img_shape, img_shm_name):
-        self.tv = TeleVision(binocular, img_shape, img_shm_name)
+    def __init__(self, binocular, img_shape, img_shm_name, ngrok):
+        self.tv = TeleVision(binocular, img_shape, img_shm_name, ngrok=ngrok)
 
     def get_data(self):
 
