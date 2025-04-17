@@ -90,7 +90,7 @@ class G1_29_ArmController:
 
         ret = audio_client.GetVolume()
         print("debug GetVolume: ",ret)
-        audio_client.TtsMaker("大家好!我是宇树科技人形机器人。语音开发测试例程运行成功！ 很高兴认识你！",0)
+        audio_client.TtsMaker("Stand Back, I will kill you！",0)
         time.sleep(8)
         ## Debug Ende
         # Todo: Warum sendet der Roboter nicht seine gelenkdaten?

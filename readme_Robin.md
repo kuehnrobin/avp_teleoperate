@@ -2,6 +2,19 @@
 
 This Guid explains how to start the Hand Teleoperation with the Meta Quest 3.
 
+## Short Guide
+
+    unitree@PC2:~/image_server$ python image_server.py
+
+
+    python ~/avp_teleoperate/teleop/teleop_hand_and_arm.py --arm=G1_29 --hand=dex3 --cyclonedds_uri=enxa0cec8616f27
+
+    ngrok http 8012
+
+If the --record parameter is used, Operator B can press s key in the opened "record image" window to start recording data, and press s again to stop. This operation can be repeated as needed for multiple recordings.
+
+To exit the program, Operator B can press the q key in the 'record image' window.
+
 ## Check Host machine local ip address:
 
     ~/avp_teleoperate$ ifconfig | grep inet
@@ -9,6 +22,10 @@ This Guid explains how to start the Hand Teleoperation with the Meta Quest 3.
 ## Run ngrok
 
     ngrok http 8012
+
+### Static domain
+
+    
 
 ## Now located in Unitree Robot PC2 terminal
 

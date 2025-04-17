@@ -3,8 +3,7 @@ import meshcat.geometry as mg
 import numpy as np
 import pinocchio as pin                             
 import time
-#from pinocchio import casadi as cpin
-import casadi as cpin               
+from pinocchio import casadi as cpin
 from pinocchio.robot_wrapper import RobotWrapper    
 from pinocchio.visualize import MeshcatVisualizer   
 import os
