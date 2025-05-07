@@ -9,7 +9,11 @@ This Guid explains how to start the Hand Teleoperation with the Meta Quest 3.
 
     python ~/avp_teleoperate/teleop/teleop_hand_and_arm.py --arm=G1_29 --hand=dex3 --cyclonedds_uri=enxa0cec8616f27
 
+    python teleop_hand_and_arm.py --arm=G1_29 --hand=dex3 --cyclonedds_uri=enxa0cec8616f27 --record
+
     ngrok http 8012
+
+    adb reverse tcp:8012 tcp:8012
 
 If the --record parameter is used, Operator B can press s key in the opened "record image" window to start recording data, and press s again to stop. This operation can be repeated as needed for multiple recordings.
 
