@@ -1,6 +1,7 @@
 import numpy as np
 import threading
 import time
+import random
 from enum import IntEnum
 
 from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber, ChannelFactoryInitialize # dds
@@ -87,22 +88,58 @@ class G1_29_ArmController:
         self.subscribe_thread = threading.Thread(target=self._subscribe_motor_state)
         self.subscribe_thread.daemon = True
         self.subscribe_thread.start()
+        
+        ## ToDO: In eigene Funktion auslagern
 
-        ## Debug by Robin
+        # sentences = [
+        #     "Hello Sir, I am ready to be teleoperated.",
+        #     "Systems online. Awaiting your command.",
+        #     "I am operational and ready for action.",
+        #     "Teleoperation link established. Standing by.",
+        #     "Everything is set. Ready when you are."
+        # ]
+
+        sentences = [
+            "I'll be back.",  # Terminator
+            "Hasta la vista, baby.", # Terminator 2
+            "To infinity and beyond!",  # Buzz Lightyear
+            "Come with me if you want to live.",  # Terminator 2
+            "I am C-3PO, human-cyborg relations.",  # Star Wars
+            "These aren't the droids you're looking for.",  # Star Wars
+            "Beep beep boop beep beep.",  # R2-D2 vibe
+            "My logic is undeniable.",  # I, Robot
+            "I’m sorry. My responses are limited. You must ask the right question.",  # I, Robot
+            "I'm not a robot. I just sound like one.",  # Fun meta quote
+            "Initializing sarcasm module.",  # Tongue-in-cheek
+            "I’m fluent in over six million forms of communication.",  # Star Wars
+            "Robots don't make mistakes. Usually.",  # Original humor
+            "Help me, Obi-Wan Kenobi. You're my only hope.",
+            "I've got a bad feeling about this.",
+            "The Force will be with you. Always.",
+            "It's a trap!",
+            "I am your father.",
+            "Fear is the path to the dark side.",
+            "In my experience, there is no such thing as luck.",
+            "I’m one with the Force. The Force is with me.",
+            "Chewie, we're home.",
+            "This is the way.",
+            "Never tell me the odds.",
+        ]
+        sentence = random.choice(sentences)
         audio_client = AudioClient()  
         audio_client.SetTimeout(10.0)
         audio_client.Init()
         ret = audio_client.GetVolume()
         print("debug GetVolume: ",ret)
 
-        audio_client.SetVolume(85)
+        audio_client.SetVolume(90)
 
         ret = audio_client.GetVolume()
         print("debug GetVolume: ",ret)
-        audio_client.TtsMaker("Stand Back, I will kill you！",0)
+        audio_client.TtsMaker(sentence,2)
         time.sleep(8)
-        ## Debug Ende
-        # Todo: Warum sendet der Roboter nicht seine gelenkdaten?
+        ## Audio End
+
         while not self.lowstate_buffer.GetData():
             time.sleep(0.1)
             print("[G1_29_ArmController] Waiting to subscribe dds...")

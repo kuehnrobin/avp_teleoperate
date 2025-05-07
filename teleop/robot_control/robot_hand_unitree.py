@@ -80,8 +80,11 @@ class Dex3_1_Controller:
         self.subscribe_state_thread.start()
 
         while True:
-            if any(self.left_hand_state_array) and any(self.right_hand_state_array):
-                break
+            if any(self.left_hand_state_array):
+                print("[Dex3_1_Controller] Left hand state has been initialized.")
+                if any(self.right_hand_state_array):
+                    print("[Dex3_1_Controller] Right hand state has been initialized.")
+                    break
             time.sleep(0.01)
             print("[Dex3_1_Controller] Waiting to subscribe dds...")
 
@@ -406,7 +409,7 @@ if __name__ == "__main__":
     img_config = {
         'fps': 30,
         'head_camera_type': 'opencv',
-        'head_camera_image_shape': [480, 1280],  # Head camera resolution
+        'head_camera_image_shape': [1080, 3840],  # Head camera resolution
         'head_camera_id_numbers': [0],
     }
     ASPECT_RATIO_THRESHOLD = 2.0  # If the aspect ratio exceeds this value, it is considered binocular
