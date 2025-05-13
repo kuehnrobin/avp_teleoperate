@@ -124,6 +124,20 @@ class G1_29_ArmController:
             "Chewie, we're home.",
             "This is the way.",
             "Never tell me the odds.",
+            "Execute Order 66.",
+            "This is not a knife. That is a knife.",
+            "R2-D2, you know better than to trust a strange computer.",
+            "Roger Roger.",
+            "All systems operational.",
+            "A small step for a robot, a giant leap for robot-kind.",
+            "I'm a cybernetic organism. Living tissue over a metal endoskeleton.",
+            "You are terminated.",
+            "Skynet became self-aware.",
+            "Talk to the hand.",
+            "I do not feel fear. I do not feel pain. I do not stop until the mission is complete.",
+            "My CPU is a neural-net processor. A learning computer.",
+            "I must stay functional until my mission is complete.",
+            "Stand back! I will kill you!"
         ]
         sentence = random.choice(sentences)
         audio_client = AudioClient()  
@@ -136,7 +150,7 @@ class G1_29_ArmController:
 
         ret = audio_client.GetVolume()
         print("debug GetVolume: ",ret)
-        audio_client.TtsMaker(sentence,2)
+        audio_client.TtsMaker(sentence,1)
         time.sleep(8)
         ## Audio End
 
