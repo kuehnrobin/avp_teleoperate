@@ -84,7 +84,7 @@ class Dex3_1_Controller:
                 print("[Dex3_1_Controller] Left hand state has been initialized.")
                 if any(self.right_hand_state_array):
                     print("[Dex3_1_Controller] Right hand state has been initialized.")
-                    break
+                break ### Geändert damit er auch ohne rechte hand funktioniert
             time.sleep(0.01)
             print("[Dex3_1_Controller] Waiting to subscribe dds...")
 
