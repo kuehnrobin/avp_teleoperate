@@ -63,10 +63,10 @@ class G1_29_ArmController:
 
         self.kp_high = 300.0
         self.kd_high = 3.0
-        self.kp_low = 80.0
-        self.kd_low = 3.0
-        self.kp_wrist = 40.0
-        self.kd_wrist = 1.5
+        self.kp_low = 150.0  # Increase from 80.0 to 150.0
+        self.kd_low = 5.0    # Increase from 3.0 to 5.0
+        self.kp_wrist = 60.0  # Increase from 40.0 to 60.0
+        self.kd_wrist = 2.0   # Increase from 1.5 to 2.0
 
         self.all_motor_q = None
         self.arm_velocity_limit = 20.0
