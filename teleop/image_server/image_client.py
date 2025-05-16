@@ -156,7 +156,7 @@ class ImageClient:
                     print("[Image Client] Failed to decode image.")
                     continue
                 # Rotate the image by 180 degrees
-                current_image = cv2.rotate(current_image, cv2.ROTATE_180)
+                #current_image = cv2.rotate(current_image, cv2.ROTATE_180)
                 
                 if self.tv_enable_shm:
                     np.copyto(self.tv_img_array, np.array(current_image[:, :self.tv_img_shape[1]]))
