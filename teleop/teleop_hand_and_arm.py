@@ -33,6 +33,12 @@ if __name__ == '__main__':
     parser.add_argument('--hand', type=str, choices=['dex3', 'gripper', 'inspire1'], help='Select hand controller')
 
     parser.add_argument('--cyclonedds_uri', type=str, default='enxa0cec8616f27', help='Network interface for CycloneDDS (default: enxa0cec8616f27)')
+    # Speed Limit
+    parser.add_argument('--arm-speed', type=float, default=None, 
+                      help='Set the arm velocity limit (default is controller-specific)')
+    parser.add_argument('--no-gradual-speed', action='store_true',
+                      help='Disable gradual speed increase')
+    
     args = parser.parse_args()
     print(f"args:{args}\n")
 
@@ -84,15 +90,23 @@ if __name__ == '__main__':
     if args.arm == 'G1_29':
         arm_ctrl = G1_29_ArmController(networkInterface=args.cyclonedds_uri)
         arm_ik = G1_29_ArmIK()
+        if args.arm_speed is not None:
+            arm_ctrl.arm_velocity_limit = args.arm_speed
     elif args.arm == 'G1_23':
         arm_ctrl = G1_23_ArmController(networkInterface=args.cyclonedds_uri)
         arm_ik = G1_23_ArmIK()
+        if args.arm_speed is not None:
+            arm_ctrl.arm_velocity_limit = args.arm_speed
     elif args.arm == 'H1_2':
         arm_ctrl = H1_2_ArmController(networkInterface=args.cyclonedds_uri)
         arm_ik = H1_2_ArmIK()
+        if args.arm_speed is not None:
+            arm_ctrl.arm_velocity_limit = args.arm_speed
     elif args.arm == 'H1':
         arm_ctrl = H1_ArmController()
         arm_ik = H1_ArmIK()
+        if args.arm_speed is not None:
+            arm_ctrl.arm_velocity_limit = args.arm_speed
 
     # hand
     if args.hand == "dex3":
@@ -126,8 +140,8 @@ if __name__ == '__main__':
     try:
         user_input = input("Please enter the start signal (enter 'r' to start the subsequent program):\n")
         if user_input.lower() == 'r':
-            arm_ctrl.speed_gradual_max()
-
+            if not args.no_gradual_speed:
+                arm_ctrl.speed_gradual_max()
             running = True
             while running:
                 start_time = time.time()

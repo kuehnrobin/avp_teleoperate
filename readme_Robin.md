@@ -11,6 +11,9 @@ This Guid explains how to start the Hand Teleoperation with the Meta Quest 3.
 
     python teleop_hand_and_arm.py --arm=G1_29 --hand=dex3 --cyclonedds_uri=enxa0cec8616f27 --record
 
+    Optional: limit speed
+    python teleop_hand_and_arm.py --arm=G1_29 --hand=dex3 --arm-speed=5.0 --no-gradual-speed --cyclonedds_uri=enxa0cec8616f27 --record
+
     ngrok http 8012
 
     adb reverse tcp:8012 tcp:8012
