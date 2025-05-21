@@ -9,9 +9,10 @@ This Guid explains how to start the Hand Teleoperation with the Meta Quest 3.
 
     python ~/avp_teleoperate/teleop/teleop_hand_and_arm.py --arm=G1_29 --hand=dex3 --cyclonedds_uri=enxa0cec8616f27
 
-    python teleop_hand_and_arm.py --arm=G1_29 --hand=dex3 --cyclonedds_uri=enxa0cec8616f27 --record
+    python teleop_hand_and_arm.py --arm=G1_29 --hand=dex3 --cyclonedds_uri=enxa0cec8616f27 --record 
 
-    ngrok http 8012
+    Optional choose the retargeting method:
+    python teleop_hand_and_arm.py --arm=G1_29 --hand=dex3 --cyclonedds_uri=enxa0cec8616f27 --record --retarget-method=dexpilot
 
     adb reverse tcp:8012 tcp:8012
 

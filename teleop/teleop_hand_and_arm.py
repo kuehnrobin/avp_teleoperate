@@ -31,6 +31,9 @@ if __name__ == '__main__':
 
     parser.add_argument('--arm', type=str, choices=['G1_29', 'G1_23', 'H1_2', 'H1'], default='G1_29', help='Select arm controller')
     parser.add_argument('--hand', type=str, choices=['dex3', 'gripper', 'inspire1'], help='Select hand controller')
+    # Add new argument for retargeting method
+    parser.add_argument('--retarget-method', type=str, choices=['vector', 'dexpilot'], default='vector', 
+                      help='Select hand retargeting method (vector: individual fingers, dexpilot: coordinated fingers)')
 
     parser.add_argument('--cyclonedds_uri', type=str, default='enxa0cec8616f27', help='Network interface for CycloneDDS (default: enxa0cec8616f27)')
     args = parser.parse_args()
@@ -101,7 +104,14 @@ if __name__ == '__main__':
         dual_hand_data_lock = Lock()
         dual_hand_state_array = Array('d', 14, lock = False)  # [output] current left, right hand state(14) data.
         dual_hand_action_array = Array('d', 14, lock = False) # [output] current left, right hand action(14) data.
-        hand_ctrl = Dex3_1_Controller(left_hand_array, right_hand_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array, networkInterface=args.cyclonedds_uri)
+        hand_ctrl = Dex3_1_Controller(
+            left_hand_array, right_hand_array, 
+            dual_hand_data_lock, 
+            dual_hand_state_array, 
+            dual_hand_action_array, 
+            networkInterface=args.cyclonedds_uri,
+            retargeting_method=args.retarget_method
+        )
     elif args.hand == "gripper":
         left_hand_array = Array('d', 75, lock=True)
         right_hand_array = Array('d', 75, lock=True)

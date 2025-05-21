@@ -17,7 +17,7 @@ from multiprocessing import Process, shared_memory, Array, Lock
 
 parent2_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(parent2_dir)
-from teleop.robot_control.hand_retargeting import HandRetargeting, HandType
+from teleop.robot_control.hand_retargeting import HandRetargeting, HandType, RetargetingMethod
 from teleop.utils.weighted_moving_filter import WeightedMovingFilter
 
 
@@ -31,7 +31,8 @@ kTopicDex3RightState = "rt/dex3/right/state"
 
 class Dex3_1_Controller:
     def __init__(self, left_hand_array, right_hand_array, dual_hand_data_lock = None, dual_hand_state_array = None,
-                       dual_hand_action_array = None, fps = 100.0, Unit_Test = False, networkInterface='enxa0cec8616f27'):
+                       dual_hand_action_array = None, fps = 100.0, Unit_Test = False, networkInterface='enxa0cec8616f27',
+                       retargeting_method='vector'):
         """
         [note] A *_array type parameter requires using a multiprocessing Array, because it needs to be passed to the internal child process
 
@@ -53,10 +54,18 @@ class Dex3_1_Controller:
 
         self.fps = fps
         self.Unit_Test = Unit_Test
+        # Initialize hand retargeting with the specified method
+        retarget_method_enum = RetargetingMethod.VECTOR if retargeting_method == 'vector' else RetargetingMethod.DEXPILOT
+        try:
+            if Unit_Test:
+                self.hand_retargeting = HandRetargeting(HandType.UNITREE_DEX3_Unit_Test, retarget_method_enum)
+            else:
+                self.hand_retargeting = HandRetargeting(HandType.UNITREE_DEX3, retarget_method_enum)
+        except Exception as e:
+            print(f"Failed to initialize hand retargeting: {e}")
+            raise
+
         if not self.Unit_Test:
-            self.hand_retargeting = HandRetargeting(HandType.UNITREE_DEX3)
-        else:
-            self.hand_retargeting = HandRetargeting(HandType.UNITREE_DEX3_Unit_Test)
             ChannelFactoryInitialize(0, networkInterface)
 
         # initialize handcmd publisher and handstate subscriber
