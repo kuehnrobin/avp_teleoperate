@@ -1,13 +1,14 @@
+import os
+import sys
+import time
+
 import casadi
 import meshcat.geometry as mg
 import numpy as np
 import pinocchio as pin
-import time
 from pinocchio import casadi as cpin
 from pinocchio.robot_wrapper import RobotWrapper
 from pinocchio.visualize import MeshcatVisualizer
-import os
-import sys
 
 parent2_dir = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

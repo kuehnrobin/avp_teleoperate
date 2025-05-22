@@ -1,27 +1,21 @@
-import numpy as np
+import random
 import threading
 import time
-import random
 from enum import IntEnum
 
-from unitree_sdk2py.core.channel import (
-    ChannelPublisher,
-    ChannelSubscriber,
-    ChannelFactoryInitialize,
-)  # dds
-from unitree_sdk2py.idl.unitree_hg.msg.dds_ import (
-    LowCmd_ as hg_LowCmd,
-    LowState_ as hg_LowState,
-)  # idl for g1, h1_2
-from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
-from unitree_sdk2py.utils.crc import CRC
+import numpy as np
+from unitree_sdk2py.core.channel import (ChannelFactoryInitialize,  # dds
+                                         ChannelPublisher, ChannelSubscriber)
 from unitree_sdk2py.g1.audio.g1_audio_client import AudioClient
-
-from unitree_sdk2py.idl.unitree_go.msg.dds_ import (
-    LowCmd_ as go_LowCmd,
-    LowState_ as go_LowState,
-)  # idl for h1
-from unitree_sdk2py.idl.default import unitree_go_msg_dds__LowCmd_
+from unitree_sdk2py.idl.default import (unitree_go_msg_dds__LowCmd_,
+                                        unitree_hg_msg_dds__LowCmd_)
+from unitree_sdk2py.idl.unitree_go.msg.dds_ import \
+    LowCmd_ as go_LowCmd  # idl for h1
+from unitree_sdk2py.idl.unitree_go.msg.dds_ import LowState_ as go_LowState
+from unitree_sdk2py.idl.unitree_hg.msg.dds_ import \
+    LowCmd_ as hg_LowCmd  # idl for g1, h1_2
+from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowState_ as hg_LowState
+from unitree_sdk2py.utils.crc import CRC
 
 kTopicLowCommand = "rt/lowcmd"
 kTopicLowState = "rt/lowstate"
@@ -1207,8 +1201,8 @@ class H1_JointIndex(IntEnum):
 
 
 if __name__ == "__main__":
-    from robot_arm_ik import G1_29_ArmIK, G1_23_ArmIK, H1_2_ArmIK, H1_ArmIK
     import pinocchio as pin
+    from robot_arm_ik import G1_23_ArmIK, G1_29_ArmIK, H1_2_ArmIK, H1_ArmIK
 
     arm_ik = G1_29_ArmIK(Unit_Test=True, Visualization=False)
     arm = G1_29_ArmController()

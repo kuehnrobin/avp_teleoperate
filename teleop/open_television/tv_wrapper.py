@@ -1,8 +1,10 @@
-import numpy as np
-from teleop.open_television.television import TeleVision
-from teleop.open_television.constants import *
-from teleop.utils.mat_tool import mat_update, fast_mat_inv
 import logging
+
+import numpy as np
+
+from teleop.open_television.constants import *
+from teleop.open_television.television import TeleVision
+from teleop.utils.mat_tool import fast_mat_inv, mat_update
 
 """
 (basis) OpenXR Convention : y up, z back, x right. 

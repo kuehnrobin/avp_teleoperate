@@ -13,7 +13,7 @@ import numpy as np
 import six
 import trimesh
 import trimesh.transformations as tra
-from anytree import Node, LevelOrderIter
+from anytree import LevelOrderIter, Node
 from lxml import etree
 
 _logger = logging.getLogger(__name__)

@@ -1,7 +1,9 @@
-from .dex_retargeting.retargeting_config import RetargetingConfig
-from pathlib import Path
-import yaml
 from enum import Enum
+from pathlib import Path
+
+import yaml
+
+from .dex_retargeting.retargeting_config import RetargetingConfig
 
 
 class HandType(Enum):

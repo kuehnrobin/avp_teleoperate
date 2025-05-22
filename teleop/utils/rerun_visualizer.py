@@ -1,10 +1,11 @@
-import os
 import json
-import cv2
+import os
 import time
+from datetime import datetime
+
+import cv2
 import rerun as rr
 import rerun.blueprint as rrb
-from datetime import datetime
 
 
 class RerunEpisodeReader:
@@ -189,9 +190,10 @@ class RerunLogger:
 
 
 if __name__ == "__main__":
-    import gdown
-    import zipfile
     import os
+    import zipfile
+
+    import gdown
 
     zip_file = "rerun_testdata.zip"
     zip_file_download_url = "https://drive.google.com/file/d/1f5UuFl1z_gaByg_7jDRj1_NxfJZh2evD/view?usp=sharing"

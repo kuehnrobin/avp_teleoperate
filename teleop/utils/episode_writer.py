@@ -1,12 +1,14 @@
-import os
-import cv2
-import json
 import datetime
-import numpy as np
+import json
+import os
 import time
-from .rerun_visualizer import RerunLogger
-from queue import Queue, Empty
+from queue import Empty, Queue
 from threading import Thread
+
+import cv2
+import numpy as np
+
+from .rerun_visualizer import RerunLogger
 
 
 class EpisodeWriter:

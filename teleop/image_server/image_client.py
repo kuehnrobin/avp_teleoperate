@@ -1,10 +1,11 @@
-import cv2
-import zmq
-import numpy as np
-import time
 import struct
+import time
 from collections import deque
 from multiprocessing import shared_memory
+
+import cv2
+import numpy as np
+import zmq
 
 
 class ImageClient:

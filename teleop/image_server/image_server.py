@@ -1,10 +1,11 @@
-import cv2
-import zmq
-import time
 import struct
+import time
 from collections import deque
+
+import cv2
 import numpy as np
 import pyrealsense2 as rs
+import zmq
 
 
 class RealSenseCamera(object):

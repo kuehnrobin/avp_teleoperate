@@ -1,18 +1,17 @@
 # this file is legacy, need to fix.
-from unitree_sdk2py.core.channel import (
-    ChannelPublisher,
-    ChannelSubscriber,
-    ChannelFactoryInitialize,
-)  # dds
-from unitree_sdk2py.idl.unitree_go.msg.dds_ import MotorCmds_, MotorStates_  # idl
-from unitree_sdk2py.idl.default import unitree_go_msg_dds__MotorCmd_
-
-from teleop.robot_control.hand_retargeting import HandRetargeting, HandType
-import numpy as np
-from enum import IntEnum
 import threading
 import time
-from multiprocessing import Process, shared_memory, Array, Lock
+from enum import IntEnum
+from multiprocessing import Array, Lock, Process, shared_memory
+
+import numpy as np
+from unitree_sdk2py.core.channel import (ChannelFactoryInitialize,  # dds
+                                         ChannelPublisher, ChannelSubscriber)
+from unitree_sdk2py.idl.default import unitree_go_msg_dds__MotorCmd_
+from unitree_sdk2py.idl.unitree_go.msg.dds_ import (MotorCmds_,  # idl
+                                                    MotorStates_)
+
+from teleop.robot_control.hand_retargeting import HandRetargeting, HandType
 
 inspire_tip_indices = [4, 9, 14, 19, 24]
 Inspire_Num_Motors = 6

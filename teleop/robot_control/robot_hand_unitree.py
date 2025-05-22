@@ -1,28 +1,20 @@
 # for dex3-1
-from unitree_sdk2py.core.channel import (
-    ChannelPublisher,
-    ChannelSubscriber,
-    ChannelFactoryInitialize,
-)  # dds
-from unitree_sdk2py.idl.unitree_hg.msg.dds_ import HandCmd_, HandState_  # idl
-from unitree_sdk2py.idl.default import unitree_hg_msg_dds__HandCmd_
-
-# for gripper
-from unitree_sdk2py.core.channel import (
-    ChannelPublisher,
-    ChannelSubscriber,
-    ChannelFactoryInitialize,
-)  # dds
-from unitree_sdk2py.idl.unitree_go.msg.dds_ import MotorCmds_, MotorStates_  # idl
-from unitree_sdk2py.idl.default import unitree_go_msg_dds__MotorCmd_
-
-import numpy as np
-from enum import IntEnum
-import time
 import os
 import sys
 import threading
-from multiprocessing import Process, shared_memory, Array, Lock
+import time
+from enum import IntEnum
+from multiprocessing import Array, Lock, Process, shared_memory
+
+import numpy as np
+# for gripper
+from unitree_sdk2py.core.channel import (ChannelFactoryInitialize,  # dds
+                                         ChannelPublisher, ChannelSubscriber)
+from unitree_sdk2py.idl.default import (unitree_go_msg_dds__MotorCmd_,
+                                        unitree_hg_msg_dds__HandCmd_)
+from unitree_sdk2py.idl.unitree_go.msg.dds_ import (MotorCmds_,  # idl
+                                                    MotorStates_)
+from unitree_sdk2py.idl.unitree_hg.msg.dds_ import HandCmd_, HandState_  # idl
 
 parent2_dir = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -30,7 +22,6 @@ parent2_dir = os.path.dirname(
 sys.path.append(parent2_dir)
 from teleop.robot_control.hand_retargeting import HandRetargeting, HandType
 from teleop.utils.weighted_moving_filter import WeightedMovingFilter
-
 
 unitree_tip_indices = [4, 9, 14]  # [thumb, index, middle] in OpenXR
 Dex3_Num_Motors = 7
@@ -518,8 +509,9 @@ class Gripper_JointIndex(IntEnum):
 
 if __name__ == "__main__":
     import argparse
-    from teleop.open_television.tv_wrapper import TeleVisionWrapper
+
     from teleop.image_server.image_client import ImageClient
+    from teleop.open_television.tv_wrapper import TeleVisionWrapper
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--dex", action="store_true", help="Use dex3-1 hand")

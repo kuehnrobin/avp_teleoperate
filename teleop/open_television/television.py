@@ -1,12 +1,11 @@
-import time
-from vuer import Vuer
-from vuer.schemas import ImageBackground, Hands
-from multiprocessing import Array, Process, shared_memory
-import numpy as np
 import asyncio
-import cv2
+import time
+from multiprocessing import Array, Process, context, shared_memory
 
-from multiprocessing import context
+import cv2
+import numpy as np
+from vuer import Vuer
+from vuer.schemas import Hands, ImageBackground
 
 Value = context._default_context.Value
 
@@ -184,6 +183,7 @@ if __name__ == "__main__":
     parent_dir = os.path.dirname(current_dir)
     sys.path.append(parent_dir)
     import threading
+
     from image_server.image_client import ImageClient
 
     # image
