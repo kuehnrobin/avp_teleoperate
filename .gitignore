@@ -11,6 +11,7 @@ __MACOSX/
 *.jpg
 *.svo
 *.png
+*.log
 !video_cover.jpg
 !head_camera_mount_install.png
 !head_camera_mount.png
