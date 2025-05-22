@@ -75,6 +75,8 @@ class TeleVisionWrapper:
         head_vuer_mat, head_flag = mat_update(const_head_vuer_mat, self.tv.head_matrix.copy())
         left_wrist_vuer_mat, left_wrist_flag  = mat_update(const_left_wrist_vuer_mat, self.tv.left_hand.copy())
         right_wrist_vuer_mat, right_wrist_flag = mat_update(const_right_wrist_vuer_mat, self.tv.right_hand.copy())
+        
+        print(f"DEBUG: Wrist flags - left: {left_wrist_flag}, right: {right_wrist_flag}")
 
         # Change basis convention: VuerMat ((basis) OpenXR Convention) to WristMat ((basis) Robot Convention)
         # p.s. WristMat = T_{robot}_{openxr} * VuerMat * T_{robot}_{openxr}^T
@@ -143,5 +145,7 @@ class TeleVisionWrapper:
         unitree_right_wrist[0,3] +=0.15
         unitree_left_wrist[2, 3] +=0.45
         unitree_right_wrist[2,3] +=0.45
+        print(f"DEBUG: Final left wrist height (z): {unitree_left_wrist[2, 3]:.3f}")
+        print(f"DEBUG: Final right wrist height (z): {unitree_right_wrist[2, 3]:.3f}")
 
         return head_rmat, unitree_left_wrist, unitree_right_wrist, unitree_left_hand, unitree_right_hand

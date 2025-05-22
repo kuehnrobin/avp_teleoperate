@@ -4,6 +4,7 @@ import argparse
 import cv2
 from multiprocessing import shared_memory, Array, Lock
 import threading
+import pinocchio as pin  # Add for debugging pose outputs
 
 import os 
 import sys
@@ -18,6 +19,36 @@ from teleop.robot_control.robot_hand_unitree import Dex3_1_Controller, Gripper_C
 from teleop.robot_control.robot_hand_inspire import Inspire_Controller
 from teleop.image_server.image_client import ImageClient
 from teleop.utils.episode_writer import EpisodeWriter
+
+
+# Helper function to analyze pose and print in readable format
+def analyze_pose(name, pose_matrix):
+    """Print details of a pose matrix in a readable format"""
+    # Extract position
+    position = pose_matrix[:3, 3]
+    
+    # Extract rotation as RPY angles (in degrees)
+    if hasattr(pin, 'rpy'):
+        try:
+            rot_mat = pose_matrix[:3, :3]
+            rpy = pin.rpy.matrixToRpy(rot_mat)
+            rpy_degrees = np.degrees(rpy)
+            print(f"{name} Position: [{position[0]:.3f}, {position[1]:.3f}, {position[2]:.3f}]")
+            print(f"{name} Rotation (RPY deg): [{rpy_degrees[0]:.1f}, {rpy_degrees[1]:.1f}, {rpy_degrees[2]:.1f}]")
+            
+            # Check height (z-axis in robot's coordinate frame)
+            print(f"{name} Height (z): {position[2]:.3f}")
+            
+            # For wrist poses, we're most interested in the height
+            if "wrist" in name.lower():
+                print(f">>> {name} HEIGHT CHECK: {position[2]:.3f} <<<")
+                if position[2] > 0.2:  # Example threshold
+                    print(f"WARNING: {name} is above threshold!")
+        except Exception as e:
+            print(f"Error analyzing {name}: {e}")
+    else:
+        # Fallback if pin.rpy is not available
+        print(f"{name} Matrix:\n{pose_matrix}")
 
 
 if __name__ == '__main__':
@@ -86,6 +117,8 @@ if __name__ == '__main__':
     # television: obtain hand pose data from the XR device and transmit the robot's head camera image to the XR device.
     tv_wrapper = TeleVisionWrapper(BINOCULAR, tv_img_shape, tv_img_shm.name, ngrok=True) # True for quest3
 
+    # COMMENTED OUT: arm controller initialization
+    """
     # arm
     if args.arm == 'G1_29':
         arm_ctrl = G1_29_ArmController(networkInterface=args.cyclonedds_uri)
@@ -107,29 +140,33 @@ if __name__ == '__main__':
         arm_ik = H1_ArmIK()
         if args.arm_speed is not None:
             arm_ctrl.arm_velocity_limit = args.arm_speed
+    """
 
-    # hand
+    # Print placeholder for debugging
+    print("ARM CONTROLLERS DISABLED - Running in debug/analysis mode")
+
+    # COMMENTED OUT: hand controller initialization (but keep data structures for debugging)
     if args.hand == "dex3":
         left_hand_array = Array('d', 75, lock = True)         # [input]
         right_hand_array = Array('d', 75, lock = True)        # [input]
         dual_hand_data_lock = Lock()
         dual_hand_state_array = Array('d', 14, lock = False)  # [output] current left, right hand state(14) data.
         dual_hand_action_array = Array('d', 14, lock = False) # [output] current left, right hand action(14) data.
-        hand_ctrl = Dex3_1_Controller(left_hand_array, right_hand_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array, networkInterface=args.cyclonedds_uri)
+        #hand_ctrl = Dex3_1_Controller(left_hand_array, right_hand_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array, networkInterface=args.cyclonedds_uri)
     elif args.hand == "gripper":
         left_hand_array = Array('d', 75, lock=True)
         right_hand_array = Array('d', 75, lock=True)
         dual_gripper_data_lock = Lock()
         dual_gripper_state_array = Array('d', 2, lock=False)   # current left, right gripper state(2) data.
         dual_gripper_action_array = Array('d', 2, lock=False)  # current left, right gripper action(2) data.
-        gripper_ctrl = Gripper_Controller(left_hand_array, right_hand_array, dual_gripper_data_lock, dual_gripper_state_array, dual_gripper_action_array, networkInterface=args.cyclonedds_uri)
+        #gripper_ctrl = Gripper_Controller(left_hand_array, right_hand_array, dual_gripper_data_lock, dual_gripper_state_array, dual_gripper_action_array, networkInterface=args.cyclonedds_uri)
     elif args.hand == "inspire1":
         left_hand_array = Array('d', 75, lock = True)          # [input]
         right_hand_array = Array('d', 75, lock = True)         # [input]
         dual_hand_data_lock = Lock()
         dual_hand_state_array = Array('d', 12, lock = False)   # [output] current left, right hand state(12) data.
         dual_hand_action_array = Array('d', 12, lock = False)  # [output] current left, right hand action(12) data.
-        hand_ctrl = Inspire_Controller(left_hand_array, right_hand_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array)
+        #hand_ctrl = Inspire_Controller(left_hand_array, right_hand_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array)
     else:
         pass
     
@@ -141,17 +178,36 @@ if __name__ == '__main__':
         user_input = input("Please enter the start signal (enter 'r' to start the subsequent program):\n")
         if user_input.lower() == 'r':
             if not args.no_gradual_speed:
-                arm_ctrl.speed_gradual_max()
+                #arm_ctrl.speed_gradual_max()
+                pass
             running = True
+            
+            # Initialize frame counter for less frequent printing
+            frame_counter = 0
+            
             while running:
                 start_time = time.time()
                 head_rmat, left_wrist, right_wrist, left_hand, right_hand = tv_wrapper.get_data()
+
+                # Update frame counter
+                frame_counter += 1
+                
+                # Only print analysis every 30 frames (about once per second) to avoid flooding
+                if frame_counter % 30 == 0:
+                    print("\n" + "="*50)
+                    print(f"FRAME {frame_counter} POSE ANALYSIS:")
+                    print("-"*50)
+                    analyze_pose("Left Wrist", left_wrist)
+                    analyze_pose("Right Wrist", right_wrist)
+                    print("="*50 + "\n")
 
                 # send hand skeleton data to hand_ctrl.control_process
                 if args.hand:
                     left_hand_array[:] = left_hand.flatten()
                     right_hand_array[:] = right_hand.flatten()
 
+                # COMMENTED OUT: arm control
+                """
                 # get current state data.
                 current_lr_arm_q  = arm_ctrl.get_current_dual_arm_q()
                 current_lr_arm_dq = arm_ctrl.get_current_dual_arm_dq()
@@ -162,6 +218,7 @@ if __name__ == '__main__':
                 time_ik_end = time.time()
                 # print(f"ik:\t{round(time_ik_end - time_ik_start, 6)}")
                 arm_ctrl.ctrl_dual_arm(sol_q, sol_tauff)
+                """
 
                 tv_resized_image = cv2.resize(tv_img_array, (tv_img_shape[1] // 2, tv_img_shape[0] // 2))
                 cv2.imshow("record image", tv_resized_image)
@@ -206,10 +263,14 @@ if __name__ == '__main__':
                     if WRIST:
                         current_wrist_image = wrist_img_array.copy()
                     # arm state and action
-                    left_arm_state  = current_lr_arm_q[:7]
-                    right_arm_state = current_lr_arm_q[-7:]
-                    left_arm_action = sol_q[:7]
-                    right_arm_action = sol_q[-7:]
+                    # left_arm_state  = current_lr_arm_q[:7]
+                    # right_arm_state = current_lr_arm_q[-7:]
+                    # left_arm_action = sol_q[:7]
+                    # right_arm_action = sol_q[-7:]
+                    left_arm_state = np.zeros(7)
+                    right_arm_state = np.zeros(7)
+                    left_arm_action = np.zeros(7)
+                    right_arm_action = np.zeros(7)
 
                     if recording:
                         colors = {}
@@ -282,7 +343,7 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         print("KeyboardInterrupt, exiting program...")
     finally:
-        arm_ctrl.ctrl_dual_arm_go_home()
+        # arm_ctrl.ctrl_dual_arm_go_home()
         tv_img_shm.unlink()
         tv_img_shm.close()
         if WRIST:
