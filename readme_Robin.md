@@ -11,8 +11,11 @@ This Guid explains how to start the Hand Teleoperation with the Meta Quest 3.
 
     python teleop_hand_and_arm.py --arm=G1_29 --hand=dex3 --cyclonedds_uri=enxa0cec8616f27 --record
 
-    Optional: limit speed
-    python teleop_hand_and_arm.py --arm=G1_29 --hand=dex3 --arm-speed=5.0 --no-gradual-speed --cyclonedds_uri=enxa0cec8616f27 --record
+    Reccomended: limit speed
+    python teleop_hand_and_arm.py --arm=G1_29 --hand=dex3 --arm-speed=10.0 --no-gradual-speed --cyclonedds_uri=enxa0cec8616f27 --record
+
+    Note: press s in the OpenCV window (with the camera image) to start /stop recording an episode and q to stop
+
 
     ngrok http 8012
 
