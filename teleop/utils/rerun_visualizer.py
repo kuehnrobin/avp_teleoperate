@@ -106,28 +106,29 @@ class RerunLogger:
             )
             views.append(view)
 
-        # image_plot_paths = [
-        #                     f"{self.prefix}colors/color_0",
-        #                     f"{self.prefix}colors/color_1",
-        #                     f"{self.prefix}colors/color_2",
-        #                     f"{self.prefix}colors/color_3"
-        # ]
-        # for plot_path in image_plot_paths:
-        #     view = rrb.Spatial2DView(
-        #         origin = plot_path,
-        #         time_ranges=[
-        #             rrb.VisibleTimeRange(
-        #                 "idx",
-        #                 start = rrb.TimeRangeBoundary.cursor_relative(seq = -self.IdxRangeBoundary),
-        #                 end = rrb.TimeRangeBoundary.cursor_relative(),
-        #             )
-        #         ],
-        #     )
-        #     views.append(view)
+        # Add views for camera images
+        image_plot_paths = [
+                f"{self.prefix}colors/color_0",
+                f"{self.prefix}colors/color_1",
+                f"{self.prefix}colors/color_2",
+                f"{self.prefix}colors/color_3"
+                ]
+        for plot_path in image_plot_paths:
+                view = rrb.Spatial2DView(
+                origin = plot_path,
+                time_ranges=[
+                rrb.VisibleTimeRange(
+                "idx",
+                start = rrb.TimeRangeBoundary.cursor_relative(seq = -self.IdxRangeBoundary),
+                end = rrb.TimeRangeBoundary.cursor_relative(),
+                )
+        ],
+                )
+        views.append(view)
 
         grid = rrb.Grid(contents = views,
-                        grid_columns=2,               
-                        column_shares=[1, 1],
+                        grid_columns=4,               # changed from 2 to 4
+                        column_shares=[1, 1, 1, 1],   # changed from [1, 1] to [1, 1, 1, 1]
                         row_shares=[1, 1], 
         )
         views.append(rr.blueprint.SelectionPanel(state=rrb.PanelState.Collapsed))
@@ -154,11 +155,11 @@ class RerunLogger:
                 for idx, val in enumerate(values):
                     rr.log(f"{self.prefix}{part}/actions/qpos/{idx}", rr.Scalar(val))
 
-        # # Log colors (images)
-        # colors = item_data.get('colors', {}) or {}
-        # for color_key, color_val in colors.items():
-        #     if color_val is not None:
-        #         rr.log(f"{self.prefix}colors/{color_key}", rr.Image(color_val))
+        # Log colors (images)
+        colors = item_data.get('colors', {}) or {}
+        for color_key, color_val in colors.items():
+            if color_val is not None:
+                rr.log(f"{self.prefix}colors/{color_key}", rr.Image(color_val))
 
         # # Log depths (images)
         # depths = item_data.get('depths', {}) or {}
