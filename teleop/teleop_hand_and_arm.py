@@ -4,8 +4,8 @@ import argparse
 import cv2
 from multiprocessing import shared_memory, Array, Lock
 import threading
-import pinocchio as pin  # Add for debugging pose outputs
-
+import logging
+from datetime import datetime
 import os 
 import sys
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -20,38 +20,65 @@ from teleop.robot_control.robot_hand_inspire import Inspire_Controller
 from teleop.image_server.image_client import ImageClient
 from teleop.utils.episode_writer import EpisodeWriter
 
+# Set up logging to file and console
+def setup_logging():
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_dir = os.path.join(current_dir, "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, f"pose_analysis_{timestamp}.log")
+    
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler()  # Also output to console
+        ]
+    )
+    logging.info(f"Logging to {log_file}")
+    return log_file
 
-# Helper function to analyze pose and print in readable format
+# Helper function to analyze pose and return a string representation
 def analyze_pose(name, pose_matrix):
-    """Print details of a pose matrix in a readable format"""
+    """Analyze pose matrix and return string representation"""
+    result = []
+    result.append(f"{name} Analysis:")
+    
     # Extract position
     position = pose_matrix[:3, 3]
+    result.append(f"  Position: [{position[0]:.3f}, {position[1]:.3f}, {position[2]:.3f}]")
     
-    # Extract rotation as RPY angles (in degrees)
-    if hasattr(pin, 'rpy'):
-        try:
-            rot_mat = pose_matrix[:3, :3]
-            rpy = pin.rpy.matrixToRpy(rot_mat)
-            rpy_degrees = np.degrees(rpy)
-            print(f"{name} Position: [{position[0]:.3f}, {position[1]:.3f}, {position[2]:.3f}]")
-            print(f"{name} Rotation (RPY deg): [{rpy_degrees[0]:.1f}, {rpy_degrees[1]:.1f}, {rpy_degrees[2]:.1f}]")
-            
-            # Check height (z-axis in robot's coordinate frame)
-            print(f"{name} Height (z): {position[2]:.3f}")
-            
-            # For wrist poses, we're most interested in the height
-            if "wrist" in name.lower():
-                print(f">>> {name} HEIGHT CHECK: {position[2]:.3f} <<<")
-                if position[2] > 0.2:  # Example threshold
-                    print(f"WARNING: {name} is above threshold!")
-        except Exception as e:
-            print(f"Error analyzing {name}: {e}")
-    else:
-        # Fallback if pin.rpy is not available
-        print(f"{name} Matrix:\n{pose_matrix}")
+    # Extract rotation as matrix
+    rot_mat = pose_matrix[:3, :3]
+    result.append(f"  Rotation Matrix:\n{rot_mat}")
+    
+    # For wrist poses, highlight height
+    if "wrist" in name.lower():
+        result.append(f"  HEIGHT CHECK: {position[2]:.3f}")
+        if position[2] > 0.2:  # Example threshold
+            result.append(f"  WARNING: {name} is above threshold!")
+    
+    return "\n".join(result)
 
+# Function to log full matrices
+def log_matrices(head_rmat, left_wrist, right_wrist, left_hand, right_hand, frame_num=None):
+    prefix = f"FRAME {frame_num}: " if frame_num else ""
+    logging.info(f"{prefix}Head Rotation Matrix:\n{head_rmat}")
+    logging.info(f"{prefix}Left Wrist Matrix:\n{left_wrist}")
+    logging.info(f"{prefix}Right Wrist Matrix:\n{right_wrist}")
+    logging.info(f"{prefix}Left Hand Matrix Shape: {left_hand.shape}")
+    logging.info(f"{prefix}Right Hand Matrix Shape: {right_hand.shape}")
+    
+    # Log more detailed analysis for wrists
+    logging.info(analyze_pose("Left Wrist", left_wrist))
+    logging.info(analyze_pose("Right Wrist", right_wrist))
 
 if __name__ == '__main__':
+    # Setup logging first thing
+    log_file = setup_logging()
+    logging.info("Starting teleop_hand_and_arm.py in DEBUG mode")
+    
     parser = argparse.ArgumentParser()
     parser.add_argument('--task_dir', type = str, default = './utils/data', help = 'path to save data')
     parser.add_argument('--frequency', type = int, default = 30.0, help = 'save data\'s frequency')
@@ -69,9 +96,12 @@ if __name__ == '__main__':
                       help='Set the arm velocity limit (default is controller-specific)')
     parser.add_argument('--no-gradual-speed', action='store_true',
                       help='Disable gradual speed increase')
+    # Logging frequency
+    parser.add_argument('--log-freq', type=int, default=30,
+                      help='How often to log pose data (in frames)')
     
     args = parser.parse_args()
-    print(f"args:{args}\n")
+    logging.info(f"Command line args: {args}")
 
     # image client: img_config should be the same as the configuration in image_server.py (of Robot's development computing unit)
     img_config = {
@@ -83,6 +113,8 @@ if __name__ == '__main__':
         'wrist_camera_image_shape': [480, 640],  # Wrist camera resolution
         'wrist_camera_id_numbers': [8, 10],
     }
+    logging.info(f"Image configuration: {img_config}")
+    
     ASPECT_RATIO_THRESHOLD = 2.0 # If the aspect ratio exceeds this value, it is considered binocular
     if len(img_config['head_camera_id_numbers']) > 1 or (img_config['head_camera_image_shape'][1] / img_config['head_camera_image_shape'][0] > ASPECT_RATIO_THRESHOLD):
         BINOCULAR = True
@@ -113,9 +145,11 @@ if __name__ == '__main__':
     image_receive_thread = threading.Thread(target = img_client.receive_process, daemon = True)
     image_receive_thread.daemon = True
     image_receive_thread.start()
+    logging.info("Image client thread started")
 
     # television: obtain hand pose data from the XR device and transmit the robot's head camera image to the XR device.
     tv_wrapper = TeleVisionWrapper(BINOCULAR, tv_img_shape, tv_img_shm.name, ngrok=True) # True for quest3
+    logging.info("TeleVisionWrapper initialized")
 
     # COMMENTED OUT: arm controller initialization
     """
@@ -141,9 +175,7 @@ if __name__ == '__main__':
         if args.arm_speed is not None:
             arm_ctrl.arm_velocity_limit = args.arm_speed
     """
-
-    # Print placeholder for debugging
-    print("ARM CONTROLLERS DISABLED - Running in debug/analysis mode")
+    logging.info("ARM CONTROLLERS DISABLED - Running in debug/analysis mode")
 
     # COMMENTED OUT: hand controller initialization (but keep data structures for debugging)
     if args.hand == "dex3":
@@ -168,13 +200,14 @@ if __name__ == '__main__':
         dual_hand_action_array = Array('d', 12, lock = False)  # [output] current left, right hand action(12) data.
         #hand_ctrl = Inspire_Controller(left_hand_array, right_hand_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array)
     else:
-        pass
+        logging.info("No hand controller specified")
     
     if args.record:
         recorder = EpisodeWriter(task_dir = args.task_dir, frequency = args.frequency, rerun_log = True)
         recording = False
         
     try:
+        logging.info("Press 'r' to start pose analysis mode, 'q' to quit")
         user_input = input("Please enter the start signal (enter 'r' to start the subsequent program):\n")
         if user_input.lower() == 'r':
             if not args.no_gradual_speed:
@@ -182,9 +215,10 @@ if __name__ == '__main__':
                 pass
             running = True
             
-            # Initialize frame counter for less frequent printing
+            # Initialize frame counter for logging
             frame_counter = 0
             
+            logging.info("Starting main loop for pose analysis")
             while running:
                 start_time = time.time()
                 head_rmat, left_wrist, right_wrist, left_hand, right_hand = tv_wrapper.get_data()
@@ -192,14 +226,13 @@ if __name__ == '__main__':
                 # Update frame counter
                 frame_counter += 1
                 
-                # Only print analysis every 30 frames (about once per second) to avoid flooding
-                if frame_counter % 30 == 0:
-                    print("\n" + "="*50)
-                    print(f"FRAME {frame_counter} POSE ANALYSIS:")
-                    print("-"*50)
-                    analyze_pose("Left Wrist", left_wrist)
-                    analyze_pose("Right Wrist", right_wrist)
-                    print("="*50 + "\n")
+                # Log data at specified frequency
+                if frame_counter % args.log_freq == 0:
+                    logging.info(f"="*50)
+                    logging.info(f"FRAME {frame_counter} POSE ANALYSIS:")
+                    logging.info(f"-"*50)
+                    log_matrices(head_rmat, left_wrist, right_wrist, left_hand, right_hand, frame_counter)
+                    logging.info("="*50)
 
                 # send hand skeleton data to hand_ctrl.control_process
                 if args.hand:
@@ -225,11 +258,15 @@ if __name__ == '__main__':
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord('q'):
                     running = False
+                    logging.info("User pressed 'q', exiting loop")
                 elif key == ord('s') and args.record:
                     recording = not recording # state flipping
                     if recording:
                         if not recorder.create_episode():
                             recording = False
+                            logging.info("Failed to create recording episode")
+                        else:
+                            logging.info("Started recording episode")
                     else:
                         recorder.save_episode()
 
@@ -341,9 +378,12 @@ if __name__ == '__main__':
                 # print(f"main process sleep: {sleep_time}")
 
     except KeyboardInterrupt:
-        print("KeyboardInterrupt, exiting program...")
+        logging.info("KeyboardInterrupt, exiting program...")
+    except Exception as e:
+        logging.exception(f"Error in main loop: {e}")
     finally:
         # arm_ctrl.ctrl_dual_arm_go_home()
+        logging.info("Cleaning up resources...")
         tv_img_shm.unlink()
         tv_img_shm.close()
         if WRIST:
@@ -351,5 +391,6 @@ if __name__ == '__main__':
             wrist_img_shm.close()
         if args.record:
             recorder.close()
-        print("Finally, exiting program...")
+        logging.info(f"Analysis complete. Log file: {log_file}")
+        logging.info("Exiting program.")
         exit(0)
