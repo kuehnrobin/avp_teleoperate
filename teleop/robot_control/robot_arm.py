@@ -61,12 +61,12 @@ class G1_29_ArmController:
         self.q_target = np.zeros(14)
         self.tauff_target = np.zeros(14)
 
-        self.kp_high = 300.0
-        self.kd_high = 3.0
-        self.kp_low = 200.0#150.0  # Increase from 80.0 to 150.0 to 200.0
-        self.kd_low = 8.0 #5.0    # Increase from 3.0 to 5.0 to 8.0
-        self.kp_wrist = 80.0#60.0  # Increase from 40.0 to 60.0 to 80.0
-        self.kd_wrist = 2.5# 2.0   # Increase from 1.5 to 2.0 to 2.5
+        self.kp_high = 330.0
+        self.kd_high = 4.0
+        self.kp_low = 260.0#150.0  # Increase from 80.0 to 150.0 to 200.0
+        self.kd_low = 11.0 #5.0    # Increase from 3.0 to 5.0 to 8.0
+        self.kp_wrist = 100.0#60.0  # Increase from 40.0 to 60.0 to 80.0
+        self.kd_wrist = 3.0# 2.0   # Increase from 1.5 to 2.0 to 2.5
 
         self.all_motor_q = None
         self.arm_velocity_limit = 20.0
