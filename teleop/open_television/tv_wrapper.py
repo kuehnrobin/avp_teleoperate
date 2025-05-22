@@ -2,6 +2,7 @@ import numpy as np
 from teleop.open_television.television import TeleVision
 from teleop.open_television.constants import *
 from teleop.utils.mat_tool import mat_update, fast_mat_inv
+import logging
 
 """
 (basis) OpenXR Convention : y up, z back, x right. 
@@ -63,11 +64,19 @@ under (basis) Robot Convention, hand's initial pose convention:
     p.s. **(Wrist/Hand URDF) Unitree Convention** information come from URDF files.
 """
 
+# Configure module-level logger
+logger = logging.getLogger('tv_wrapper')
+
 class TeleVisionWrapper:
     def __init__(self, binocular, img_shape, img_shm_name, ngrok):
         self.tv = TeleVision(binocular, img_shape, img_shm_name, ngrok=ngrok)
+        self.logger = logging.getLogger('tv_wrapper.TeleVisionWrapper')
+        self.frame_counter = 0
 
     def get_data(self):
+        """Get hand pose data from vuer and process it."""
+        self.frame_counter += 1
+        debug_data = {"frame": self.frame_counter}
 
         # --------------------------------wrist-------------------------------------
 
@@ -75,6 +84,17 @@ class TeleVisionWrapper:
         head_vuer_mat, head_flag = mat_update(const_head_vuer_mat, self.tv.head_matrix.copy())
         left_wrist_vuer_mat, left_wrist_flag  = mat_update(const_left_wrist_vuer_mat, self.tv.left_hand.copy())
         right_wrist_vuer_mat, right_wrist_flag = mat_update(const_right_wrist_vuer_mat, self.tv.right_hand.copy())
+        
+        debug_data["wrist_flags"] = {
+            "head": head_flag,
+            "left_wrist": left_wrist_flag, 
+            "right_wrist": right_wrist_flag
+        }
+        debug_data["raw_mats"] = {
+            "head_vuer": head_vuer_mat.copy(),
+            "left_wrist_vuer": left_wrist_vuer_mat.copy(),
+            "right_wrist_vuer": right_wrist_vuer_mat.copy()
+        }
 
         # Change basis convention: VuerMat ((basis) OpenXR Convention) to WristMat ((basis) Robot Convention)
         # p.s. WristMat = T_{robot}_{openxr} * VuerMat * T_{robot}_{openxr}^T
@@ -91,15 +111,31 @@ class TeleVisionWrapper:
         left_wrist_mat  = T_robot_openxr @ left_wrist_vuer_mat @ fast_mat_inv(T_robot_openxr)
         right_wrist_mat = T_robot_openxr @ right_wrist_vuer_mat @ fast_mat_inv(T_robot_openxr)
 
+        debug_data["robot_convention_mats"] = {
+            "head": head_mat.copy(),
+            "left_wrist": left_wrist_mat.copy(),
+            "right_wrist": right_wrist_mat.copy()
+        }
+
         # Change wrist convention: WristMat ((Left Wrist) XR/AppleVisionPro Convention) to UnitreeWristMat((Left Wrist URDF) Unitree Convention)
         # Reason for right multiply (T_to_unitree_left_wrist) : Rotate 90 degrees counterclockwise about its own x-axis.
         # Reason for right multiply (T_to_unitree_right_wrist): Rotate 90 degrees clockwise about its own x-axis.
         unitree_left_wrist = left_wrist_mat @ (T_to_unitree_left_wrist if left_wrist_flag else np.eye(4))
         unitree_right_wrist = right_wrist_mat @ (T_to_unitree_right_wrist if right_wrist_flag else np.eye(4))
+        
+        debug_data["unitree_convention_mats"] = {
+            "left_wrist": unitree_left_wrist.copy(),
+            "right_wrist": unitree_right_wrist.copy()
+        }
 
         # Transfer from WORLD to HEAD coordinate (translation only).
         unitree_left_wrist[0:3, 3]  = unitree_left_wrist[0:3, 3] - head_mat[0:3, 3]
         unitree_right_wrist[0:3, 3] = unitree_right_wrist[0:3, 3] - head_mat[0:3, 3]
+        
+        debug_data["world_to_head_mats"] = {
+            "left_wrist": unitree_left_wrist.copy(),
+            "right_wrist": unitree_right_wrist.copy()
+        }
 
         # --------------------------------hand-------------------------------------
 
@@ -138,10 +174,31 @@ class TeleVisionWrapper:
 
         head_rmat = head_mat[:3, :3]
         # The origin of the coordinate for IK Solve is the WAIST joint motor. You can use teleop/robot_control/robot_arm_ik.py Unit_Test to check it.
-        # The origin of the coordinate of unitree_left_wrist is HEAD. So it is necessary to translate the origin of unitree_left_wrist from HEAD to WAIST.
-        unitree_left_wrist[0, 3] +=0.15
-        unitree_right_wrist[0,3] +=0.15
-        unitree_left_wrist[2, 3] +=0.45
-        unitree_right_wrist[2,3] +=0.45
+        # The origin of the coordinate of unitree_left_wrist is HEAD. So it is necessary to translate the origin of unitree_left_wrist_from HEAD to WAIST.
+        # Log values before applying offset
+        debug_data["pre_offset"] = {
+            "left_wrist_pos": unitree_left_wrist[0:3, 3].copy(),
+            "right_wrist_pos": unitree_right_wrist[0:3, 3].copy()
+        }
+        
+        # Apply offsets
+        unitree_left_wrist[0, 3] += 0.15
+        unitree_right_wrist[0, 3] += 0.15
+        unitree_left_wrist[2, 3] += 0.45
+        unitree_right_wrist[2, 3] += 0.45
+        
+        # Log values after applying offset
+        debug_data["post_offset"] = {
+            "left_wrist_pos": unitree_left_wrist[0:3, 3].copy(),
+            "right_wrist_pos": unitree_right_wrist[0:3, 3].copy()
+        }
+        
+        # Log warning if wrist heights are above threshold after offset
+        if unitree_left_wrist[2, 3] > 0.45 or unitree_right_wrist[2, 3] > 0.45:
+            self.logger.debug(f"Frame {self.frame_counter}: Potentially dangerous wrist height - left: {unitree_left_wrist[2, 3]:.3f}, right: {unitree_right_wrist[2, 3]:.3f}")
+        
+        # Store debug data for this frame in a detailed debug log (only if debug logging is enabled)
+        if logger.isEnabledFor(logging.DEBUG):
+            self.logger.debug(f"Frame {self.frame_counter} complete")
 
         return head_rmat, unitree_left_wrist, unitree_right_wrist, unitree_left_hand, unitree_right_hand
