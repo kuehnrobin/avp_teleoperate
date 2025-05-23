@@ -152,6 +152,16 @@ class EpisodeWriter():
         depths = item_data.get('depths', {})
         audios = item_data.get('audios', {})
 
+        # Make a copy of color data for RerunLogger visualization before modifying it
+        vis_item_data = None
+        if self.rerun_log:
+            vis_item_data = {
+                'idx': idx,
+                'colors': {k: v.copy() if v is not None else None for k, v in colors.items()} if colors else {},
+                'states': item_data.get('states', {}),
+                'actions': item_data.get('actions', {})
+            }
+
         # Save images
         if colors:
             for idx_color, (color_key, color) in enumerate(colors.items()):
@@ -178,11 +188,14 @@ class EpisodeWriter():
         # Update episode data
         self.episode_data.append(item_data)
 
-        # Log data if necessary
-        if self.rerun_log:
+        # Log data if necessary - use the copy with actual image data for visualization
+        if self.rerun_log and vis_item_data:
             curent_record_time = time.time()
             print(f"==> episode_id:{self.episode_id}  item_id:{self.item_id}  current_time:{curent_record_time}")
-            self.rerun_logger.log_item_data(item_data)
+            try:
+                self.rerun_logger.log_item_data(vis_item_data)
+            except Exception as e:
+                print(f"Warning: RerunLogger encountered an issue: {e}")
 
     def save_episode(self):
         """

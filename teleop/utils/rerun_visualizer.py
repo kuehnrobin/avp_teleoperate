@@ -5,6 +5,7 @@ import time
 import rerun as rr
 import rerun.blueprint as rrb
 from datetime import datetime
+import numpy as np
 
 class RerunEpisodeReader:
     def __init__(self, task_dir = ".", json_file="data.json"):
@@ -137,48 +138,58 @@ class RerunLogger:
 
 
     def log_item_data(self, item_data: dict):
-        rr.set_time_sequence("idx", item_data.get('idx', 0))
+        try:
+            rr.set_time_sequence("idx", item_data.get('idx', 0))
 
-        # Log states
-        states = item_data.get('states', {}) or {}
-        for part, state_info in states.items():
-            if state_info:
-                values = state_info.get('qpos', [])
-                for idx, val in enumerate(values):
-                    rr.log(f"{self.prefix}{part}/states/qpos/{idx}", rr.Scalar(val))
+            # Log states
+            states = item_data.get('states', {}) or {}
+            for part, state_info in states.items():
+                if state_info:
+                    values = state_info.get('qpos', [])
+                    for idx, val in enumerate(values):
+                        rr.log(f"{self.prefix}{part}/states/qpos/{idx}", rr.Scalar(val))
 
-        # Log actions
-        actions = item_data.get('actions', {}) or {}
-        for part, action_info in actions.items():
-            if action_info:
-                values = action_info.get('qpos', [])
-                for idx, val in enumerate(values):
-                    rr.log(f"{self.prefix}{part}/actions/qpos/{idx}", rr.Scalar(val))
+            # Log actions
+            actions = item_data.get('actions', {}) or {}
+            for part, action_info in actions.items():
+                if action_info:
+                    values = action_info.get('qpos', [])
+                    for idx, val in enumerate(values):
+                        rr.log(f"{self.prefix}{part}/actions/qpos/{idx}", rr.Scalar(val))
 
-        # Log colors (images)
-        colors = item_data.get('colors', {}) or {}
-        for color_key, color_val in colors.items():
-            if color_val is not None:
-                rr.log(f"{self.prefix}colors/{color_key}", rr.Image(color_val))
+            # Log colors (images)
+            colors = item_data.get('colors', {}) or {}
+            for color_key, color_val in colors.items():
+                # Validate image data before logging
+                if color_val is not None and isinstance(color_val, (np.ndarray)) and color_val.ndim in (2, 3):
+                    rr.log(f"{self.prefix}colors/{color_key}", rr.Image(color_val))
+                elif color_val is not None:
+                    if isinstance(color_val, str):
+                        # Skip file path strings
+                        pass
+                    else:
+                        print(f"Warning: Invalid image data for {color_key}, shape: {getattr(color_val, 'shape', 'unknown')}")
 
-        # # Log depths (images)
-        # depths = item_data.get('depths', {}) or {}
-        # for depth_key, depth_val in depths.items():
-        #     if depth_val is not None:
-        #         # rr.log(f"{self.prefix}depths/{depth_key}", rr.Image(depth_val))
-        #         pass # Handle depth if needed
+            # # Log depths (images)
+            # depths = item_data.get('depths', {}) or {}
+            # for depth_key, depth_val in depths.items():
+            #     if depth_val is not None:
+            #         # rr.log(f"{self.prefix}depths/{depth_key}", rr.Image(depth_val))
+            #         pass # Handle depth if needed
 
-        # # Log tactile if needed
-        # tactiles = item_data.get('tactiles', {}) or {}
-        # for hand, tactile_vals in tactiles.items():
-        #     if tactile_vals is not None:
-        #         pass # Handle tactile if needed
+            # # Log tactile if needed
+            # tactiles = item_data.get('tactiles', {}) or {}
+            # for hand, tactile_vals in tactiles.items():
+            #     if tactile_vals is not None:
+            #         pass # Handle tactile if needed
 
-        # # Log audios if needed
-        # audios = item_data.get('audios', {}) or {}
-        # for audio_key, audio_val in audios.items():
-        #     if audio_val is not None:
-        #         pass  # Handle audios if needed
+            # # Log audios if needed
+            # audios = item_data.get('audios', {}) or {}
+            # for audio_key, audio_val in audios.items():
+            #     if audio_val is not None:
+            #         pass  # Handle audios if needed
+        except Exception as e:
+            print(f"Error in RerunLogger.log_item_data: {e}")
 
     def log_episode_data(self, episode_data: list):
         for item_data in episode_data:
