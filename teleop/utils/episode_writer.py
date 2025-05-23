@@ -106,8 +106,8 @@ class EpisodeWriter():
         os.makedirs(self.audio_dir, exist_ok=True)
         
         ## Probably bug
-        #if self.rerun_log:
-        #    self.online_logger = RerunLogger(prefix="online/", IdxRangeBoundary = 60, memory_limit="300MB")
+        if self.rerun_log:
+            self.online_logger = RerunLogger(prefix="online/", IdxRangeBoundary = 60, memory_limit="300MB")
 
         self.is_available = False  # After the episode is created, the class is marked as unavailable until the episode is successfully saved
         print(f"==> New episode created: {self.episode_dir}")
