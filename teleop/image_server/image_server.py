@@ -242,6 +242,31 @@ class ImageServer:
                 for cam in self.head_cameras:
                     if self.head_camera_type == 'opencv':
                         color_image = cam.get_frame()
+                        # Crop the center 480×1280 region
+                        h, w = color_image.shape[:2]          # h=1080, w=3840
+                        half_w = w // 2                        # 1920 pixels per eye
+
+                        # crop height
+                        new_h, new_w = 480, 640
+                        start_y = (h - new_h) // 2            # (1080-480)//2 = 300
+                        #start_y      = h - new_h                    # crop from bottom
+                        # crop center of left eye
+                        start_x_local = (half_w - new_w) // 2  # (1920-1280)//2 = 320
+                        left_crop  = color_image[
+                            start_y:start_y+new_h,
+                            start_x_local:start_x_local+new_w
+                        ]
+
+                        # crop center of right eye
+                        right_crop = color_image[
+                            start_y:start_y+new_h,
+                            half_w + start_x_local : half_w + start_x_local + new_w
+                        ]
+
+                        # stitch them back side by side
+                        color_image = cv2.hconcat([left_crop, right_crop])
+                        #Rotate the image by 180 degrees
+                        color_image = cv2.rotate(color_image, cv2.ROTATE_180)
                         if color_image is None:
                             print("[Image Server] Head camera frame read is error.")
                             break
@@ -260,6 +285,8 @@ class ImageServer:
                     for cam in self.wrist_cameras:
                         if self.wrist_camera_type == 'opencv':
                             color_image = cam.get_frame()
+                            # Rotate the image by 90 degrees clockwise 
+                            color_image = cv2.rotate(color_image, cv2.ROTATE_180)
                             if color_image is None:
                                 print("[Image Server] Wrist camera frame read is error.")
                                 break
@@ -308,11 +335,11 @@ if __name__ == "__main__":
     config = {
         'fps': 30,
         'head_camera_type': 'opencv',
-        'head_camera_image_shape': [1080, 3840],#[480, 1280],  # Head camera resolution
-        'head_camera_id_numbers': [0],
-        #'wrist_camera_type': 'opencv',
-        #'wrist_camera_image_shape': [480, 640],  # Wrist camera resolution
-        #'wrist_camera_id_numbers': [2, 4],
+        'head_camera_image_shape': [1080, 3840], #,[480, 1280], # Head camera resolution
+        'head_camera_id_numbers': [6],
+        'wrist_camera_type': 'opencv',
+        'wrist_camera_image_shape': [480, 640],  # Wrist camera resolution
+        'wrist_camera_id_numbers': [8, 10],
     }
 
     server = ImageServer(config, Unit_Test=False)

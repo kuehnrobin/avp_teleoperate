@@ -4,6 +4,8 @@ import argparse
 import cv2
 from multiprocessing import shared_memory, Array, Lock
 import threading
+import logging
+import os
 
 import os 
 import sys
@@ -18,7 +20,43 @@ from teleop.robot_control.robot_hand_unitree import Dex3_1_Controller, Gripper_C
 from teleop.robot_control.robot_hand_inspire import Inspire_Controller
 from teleop.image_server.image_client import ImageClient
 from teleop.utils.episode_writer import EpisodeWriter
+from teleop.utils.pose_logger import PoseLogger
 
+# Configure logging
+def setup_logging(verbose=False):
+    """Set up logging for the application"""
+    log_dir = os.path.join(current_dir, "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    
+    # Configure basic logging
+    log_level = logging.INFO if not verbose else logging.DEBUG
+    logging.basicConfig(
+        level=log_level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(os.path.join(log_dir, "teleop.log")),
+            logging.StreamHandler()  # Also output to console
+        ]
+    )
+    
+    # Set specific loggers to different levels
+    # Keep the TV wrapper quiet unless in verbose mode
+    logging.getLogger('tv_wrapper').setLevel(logging.WARNING if not verbose else logging.DEBUG)
+    
+    # Only show warnings and errors on console by default
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.WARNING)
+    console_formatter = logging.Formatter('%(levelname)s: %(message)s')
+    console_handler.setFormatter(console_formatter)
+    
+    # Replace the console handler
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers[:]:
+        if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
+            root_logger.removeHandler(handler)
+    root_logger.addHandler(console_handler)
+    
+    return logging.getLogger('teleop')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -33,18 +71,42 @@ if __name__ == '__main__':
     parser.add_argument('--hand', type=str, choices=['dex3', 'gripper', 'inspire1'], help='Select hand controller')
 
     parser.add_argument('--cyclonedds_uri', type=str, default='enxa0cec8616f27', help='Network interface for CycloneDDS (default: enxa0cec8616f27)')
+    # Speed Limit
+    parser.add_argument('--arm-speed', type=float, default=None, 
+                      help='Set the arm velocity limit (default is controller-specific)')
+    parser.add_argument('--no-gradual-speed', action='store_true',
+                      help='Disable gradual speed increase')
+    
+    # Logging options
+    parser.add_argument('--verbose', action='store_true', help='Enable verbose logging')
+    parser.add_argument('--no-pose-logging', dest='pose_logging', action='store_false', help='Disable background pose logging')
+    parser.set_defaults(pose_logging=True)
+    
     args = parser.parse_args()
-    print(f"args:{args}\n")
+    
+    # Setup logging
+    logger = setup_logging(args.verbose)
+    logger.info(f"Starting teleop_hand_and_arm.py with args: {args}")
+
+    # Initialize pose logger if enabled
+    pose_logger = None
+    if args.pose_logging:
+        pose_logger = PoseLogger(
+            log_dir=os.path.join(current_dir, "logs", "pose_data"),
+            log_interval=1.0,  # Save to disk every 1 second
+            max_buffer_size=100  # Or after 100 frames, whichever comes first
+        ).start()
+        logger.info(f"Background pose logging enabled, saving to {pose_logger.log_file}")
 
     # image client: img_config should be the same as the configuration in image_server.py (of Robot's development computing unit)
     img_config = {
         'fps': 30,
         'head_camera_type': 'opencv',
-        'head_camera_image_shape': [1080, 3840], #[480, 1280],  # Head camera resolution
-        'head_camera_id_numbers': [0],
-        #'wrist_camera_type': 'opencv',
-        #'wrist_camera_image_shape': [480, 640],  # Wrist camera resolution
-        #'wrist_camera_id_numbers': [2, 4],
+        'head_camera_image_shape': [480, 1280],# [1080, 3840], #[480, 1280],  # Head camera resolution
+        'head_camera_id_numbers': [6],
+        'wrist_camera_type': 'opencv',
+        'wrist_camera_image_shape': [480, 640],  # Wrist camera resolution
+        'wrist_camera_id_numbers': [10, 12],
     }
     ASPECT_RATIO_THRESHOLD = 2.0 # If the aspect ratio exceeds this value, it is considered binocular
     if len(img_config['head_camera_id_numbers']) > 1 or (img_config['head_camera_image_shape'][1] / img_config['head_camera_image_shape'][0] > ASPECT_RATIO_THRESHOLD):
@@ -76,23 +138,34 @@ if __name__ == '__main__':
     image_receive_thread = threading.Thread(target = img_client.receive_process, daemon = True)
     image_receive_thread.daemon = True
     image_receive_thread.start()
+    logger.info("Image receive thread started")
 
     # television: obtain hand pose data from the XR device and transmit the robot's head camera image to the XR device.
     tv_wrapper = TeleVisionWrapper(BINOCULAR, tv_img_shape, tv_img_shm.name, ngrok=True) # True for quest3
+    logger.info("TeleVision wrapper initialized")
 
     # arm
     if args.arm == 'G1_29':
         arm_ctrl = G1_29_ArmController(networkInterface=args.cyclonedds_uri)
         arm_ik = G1_29_ArmIK()
+        if args.arm_speed is not None:
+            arm_ctrl.arm_velocity_limit = args.arm_speed
+            logger.info(f"Setting custom arm velocity limit: {args.arm_speed}")
     elif args.arm == 'G1_23':
         arm_ctrl = G1_23_ArmController(networkInterface=args.cyclonedds_uri)
         arm_ik = G1_23_ArmIK()
+        if args.arm_speed is not None:
+            arm_ctrl.arm_velocity_limit = args.arm_speed
     elif args.arm == 'H1_2':
         arm_ctrl = H1_2_ArmController(networkInterface=args.cyclonedds_uri)
         arm_ik = H1_2_ArmIK()
+        if args.arm_speed is not None:
+            arm_ctrl.arm_velocity_limit = args.arm_speed
     elif args.arm == 'H1':
         arm_ctrl = H1_ArmController()
         arm_ik = H1_ArmIK()
+        if args.arm_speed is not None:
+            arm_ctrl.arm_velocity_limit = args.arm_speed
 
     # hand
     if args.hand == "dex3":
@@ -122,16 +195,29 @@ if __name__ == '__main__':
     if args.record:
         recorder = EpisodeWriter(task_dir = args.task_dir, frequency = args.frequency, rerun_log = True)
         recording = False
+        logger.info(f"Episode recorder initialized with task_dir={args.task_dir}")
         
     try:
         user_input = input("Please enter the start signal (enter 'r' to start the subsequent program):\n")
         if user_input.lower() == 'r':
-            arm_ctrl.speed_gradual_max()
-
+            if not args.no_gradual_speed:
+                arm_ctrl.speed_gradual_max()
+                logger.info("Gradual speed increase enabled")
             running = True
+            frame_counter = 0
+            
+            logger.info("Starting main control loop")
             while running:
                 start_time = time.time()
+                
+                # Get pose data
                 head_rmat, left_wrist, right_wrist, left_hand, right_hand = tv_wrapper.get_data()
+                frame_counter += 1
+                
+                # Log pose data if enabled
+                if pose_logger:
+                    pose_logger.log_pose(head_rmat, left_wrist, right_wrist, left_hand, right_hand)
+                
 
                 # send hand skeleton data to hand_ctrl.control_process
                 if args.hand:
@@ -149,18 +235,27 @@ if __name__ == '__main__':
                 # print(f"ik:\t{round(time_ik_end - time_ik_start, 6)}")
                 arm_ctrl.ctrl_dual_arm(sol_q, sol_tauff)
 
+                # Log periodic IK timing information
+                if frame_counter % 300 == 0:  # Every ~10 seconds at 30fps
+                    logger.info(f"IK solve time: {(time_ik_end - time_ik_start)*1000:.2f}ms")
+
                 tv_resized_image = cv2.resize(tv_img_array, (tv_img_shape[1] // 2, tv_img_shape[0] // 2))
                 cv2.imshow("record image", tv_resized_image)
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord('q'):
                     running = False
+                    logger.info("User requested exit with 'q' key")
                 elif key == ord('s') and args.record:
                     recording = not recording # state flipping
                     if recording:
                         if not recorder.create_episode():
                             recording = False
+                            logger.warning("Failed to create recording episode")
+                        else:
+                            logger.info("Started recording episode")
                     else:
                         recorder.save_episode()
+                        logger.info("Saved recording episode")
 
                 # record data
                 if args.record:
@@ -263,12 +358,25 @@ if __name__ == '__main__':
                 time_elapsed = current_time - start_time
                 sleep_time = max(0, (1 / float(args.frequency)) - time_elapsed)
                 time.sleep(sleep_time)
-                # print(f"main process sleep: {sleep_time}")
+
+                # Only log performance details occasionally to avoid flooding the log
+                if frame_counter % 300 == 0:  # Every ~10 seconds at 30fps
+                    actual_frequency = 1.0 / (time_elapsed + sleep_time) if (time_elapsed + sleep_time) > 0 else args.frequency
+                    logger.info(f"Performance: frame_time={time_elapsed*1000:.1f}ms, sleep={sleep_time*1000:.1f}ms, actual_freq={actual_frequency:.1f}Hz")
 
     except KeyboardInterrupt:
-        print("KeyboardInterrupt, exiting program...")
+        logger.warning("KeyboardInterrupt, exiting program...")
+    except Exception as e:
+        logger.exception(f"Error in main loop: {e}")
     finally:
+        # Clean up
+        if pose_logger:
+            pose_logger.stop()
+            logger.info("Stopped pose logger and saved data")
+            
         arm_ctrl.ctrl_dual_arm_go_home()
+        logger.info("Arms returned to home position")
+        
         tv_img_shm.unlink()
         tv_img_shm.close()
         if WRIST:
@@ -276,5 +384,5 @@ if __name__ == '__main__':
             wrist_img_shm.close()
         if args.record:
             recorder.close()
-        print("Finally, exiting program...")
+        logger.info("Resources cleaned up, exiting program")
         exit(0)
