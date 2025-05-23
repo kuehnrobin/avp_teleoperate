@@ -25,6 +25,12 @@ If the --record parameter is used, Operator B can press s key in the opened "rec
 
 To exit the program, Operator B can press the q key in the 'record image' window.
 
+## Use Active Cam
+
+    python teleop_active_cam.py --port /dev/ttyUSB0
+
+    Optional: --verbose flag for more detailed logging
+
 ## Check Host machine local ip address:
 
     ~/avp_teleoperate$ ifconfig | grep inet

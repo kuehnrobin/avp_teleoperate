@@ -1,106 +1,176 @@
-import math
 import numpy as np
-
-np.set_printoptions(precision=2, suppress=True)
-import matplotlib.pyplot as plt
-from scipy.spatial.transform import Rotation as R
-from pytransform3d import rotations
-
+import logging
+import os
+import sys
 import time
 import cv2
-from constants_vuer import *
-from TeleVision import OpenTeleVision
-from dynamixel.active_cam import DynamixelAgent
-from multiprocessing import Array, Process, shared_memory, Queue, Manager, Event, Semaphore
+import argparse
+from multiprocessing import shared_memory
+from threading import Thread
+from scipy.spatial.transform import Rotation as R
 
-# Configuration for stereo camera
-resolution = (720, 1280)  # This will be used for each individual camera
-crop_size_w = 1
-crop_size_h = 0
-resolution_cropped = (resolution[0] - crop_size_h, resolution[1] - 2 * crop_size_w)
+# Add parent directory to path for imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.append(parent_dir)
 
-# Initialize the Dynamixel servo controller (XL430-W250 is compatible with the existing driver)
-# Just make sure the port is correct for your hardware setup
-agent = DynamixelAgent(port="/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT8IT033-if00-port0")
-agent._robot.set_torque_mode(True)
+from teleop.open_television.tv_wrapper import TeleVisionWrapper
+from teleop.robot_control.dynamixel.active_cam import DynamixelAgent
+from teleop.image_server.image_client import ImageClient
 
-# OpenCV stereo camera setup - replace ZED implementation
-# Assuming camera IDs are 0 and 1 for left and right cameras, adjust if needed
-left_cam = cv2.VideoCapture(0, cv2.CAP_V4L2)
-right_cam = cv2.VideoCapture(1, cv2.CAP_V4L2)
+# Configure logging
+def setup_logging(verbose=False):
+    """Set up logging for the application"""
+    log_dir = os.path.join(current_dir, "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    
+    # Configure basic logging
+    log_level = logging.INFO if not verbose else logging.DEBUG
+    logging.basicConfig(
+        level=log_level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(os.path.join(log_dir, "teleop_active_cam.log")),
+            logging.StreamHandler()  # Also output to console
+        ]
+    )
+    
+    # Only show warnings and errors on console by default
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.WARNING if not verbose else logging.DEBUG)
+    console_formatter = logging.Formatter('%(levelname)s: %(message)s')
+    console_handler.setFormatter(console_formatter)
+    
+    # Replace the console handler
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers[:]:
+        if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
+            root_logger.removeHandler(handler)
+    root_logger.addHandler(console_handler)
+    
+    return logging.getLogger('teleop_active_cam')
 
-# Set camera properties for consistent image capture
-for cam in [left_cam, right_cam]:
-    cam.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter.fourcc('M', 'J', 'P', 'G'))
-    cam.set(cv2.CAP_PROP_FRAME_WIDTH, resolution[1])
-    cam.set(cv2.CAP_PROP_FRAME_HEIGHT, resolution[0])
-    cam.set(cv2.CAP_PROP_FPS, 60)  # Set to 60fps to match original code
+def main():
+    parser = argparse.ArgumentParser(description="Active Camera Control using VR Head Tracking")
+    parser.add_argument('--port', type=str, default="/dev/ttyUSB0", help="Serial port for the Dynamixel servo controller")
+    parser.add_argument('--verbose', action='store_true', help='Enable verbose logging')
+    args = parser.parse_args()
 
-# Check if cameras are opened successfully
-if not left_cam.isOpened() or not right_cam.isOpened():
-    print("Error opening one or both cameras. Please check camera connections.")
-    exit()
+    # Setup logging
+    logger = setup_logging(args.verbose)
+    logger.info("Starting Active Camera Head Tracking System")
 
+    # Initialize Dynamixel servo controller for the active camera platform
+    try:
+        agent = DynamixelAgent(port=args.port)
+        agent._robot.set_torque_mode(True)
+        logger.info(f"Dynamixel controller initialized on port {args.port}")
+    except Exception as e:
+        logger.error(f"Failed to initialize Dynamixel controller: {e}")
+        return
 
-img_shape = (resolution_cropped[0], 2 * resolution_cropped[1], 3)
-img_height, img_width = resolution_cropped[:2]
-shm = shared_memory.SharedMemory(create=True, size=np.prod(img_shape) * np.uint8().itemsize)
-img_array = np.ndarray((img_shape[0], img_shape[1], 3), dtype=np.uint8, buffer=shm.buf)
-image_queue = Queue()
-toggle_streaming = Event()
-tv = OpenTeleVision(resolution_cropped, shm.name, image_queue, toggle_streaming)
+    # Image configuration - using the same settings as in teleop_hand_and_arm.py
+    img_config = {
+        'fps': 30,
+        'head_camera_type': 'opencv',
+        'head_camera_image_shape': [480, 1280],  # [1080, 3840], #[480, 1280]
+        'head_camera_id_numbers': [6],
+        'wrist_camera_type': 'opencv',
+        'wrist_camera_image_shape': [480, 640],
+        'wrist_camera_id_numbers': [10, 12],
+    }
 
-print("Starting camera streaming and head tracking. Press Ctrl+C to exit.")
+    # Determine if using binocular setup
+    ASPECT_RATIO_THRESHOLD = 2.0
+    if len(img_config['head_camera_id_numbers']) > 1 or (img_config['head_camera_image_shape'][1] / img_config['head_camera_image_shape'][0] > ASPECT_RATIO_THRESHOLD):
+        BINOCULAR = True
+    else:
+        BINOCULAR = False
 
-try:
-    while True:
-        start = time.time()
+    # Setup image dimensions
+    if BINOCULAR and not (img_config['head_camera_image_shape'][1] / img_config['head_camera_image_shape'][0] > ASPECT_RATIO_THRESHOLD):
+        tv_img_shape = (img_config['head_camera_image_shape'][0], img_config['head_camera_image_shape'][1] * 2, 3)
+    else:
+        tv_img_shape = (img_config['head_camera_image_shape'][0], img_config['head_camera_image_shape'][1], 3)
 
-        # Get head orientation from the VR headset
-        head_mat = grd_yup2grd_zup[:3, :3] @ tv.head_matrix[:3, :3] @ grd_yup2grd_zup[:3, :3].T
-        if np.sum(head_mat) == 0:
-            head_mat = np.eye(3)
-        head_rot = rotations.quaternion_from_matrix(head_mat[0:3, 0:3])
+    # Create shared memory for the image
+    tv_img_shm = shared_memory.SharedMemory(create=True, size=np.prod(tv_img_shape) * np.uint8().itemsize)
+    tv_img_array = np.ndarray(tv_img_shape, dtype=np.uint8, buffer=tv_img_shm.buf)
+    
+    # Initialize the TeleVision wrapper to get head movements
+    tv_wrapper = TeleVisionWrapper(BINOCULAR, tv_img_shape, tv_img_shm.name, ngrok=True)
+    logger.info("TeleVision wrapper initialized for head tracking")
+    
+    # Reuse the same image client as in teleop_hand_and_arm.py
+    # The active camera will show what the camera sees (we're just moving the camera platform)
+    img_client = ImageClient(tv_img_shape=tv_img_shape, tv_img_shm_name=tv_img_shm.name)
+    image_receive_thread = Thread(target=img_client.receive_process, daemon=True)
+    image_receive_thread.start()
+    logger.info("Image receive thread started")
+
+    # Main control loop
+    try:
+        logger.info("Starting active camera control. Press Ctrl+C to exit.")
         
-        try:
-            # Convert quaternion to yaw-pitch-roll (same as in original code)
-            ypr = rotations.euler_from_quaternion(head_rot, 2, 1, 0, False)
-            # Command the Dynamixel servos
-            agent._robot.command_joint_state(ypr[:2])
-        except:
-            pass
+        while True:
+            start_time = time.time()
+            
+            # Get data from the VR headset
+            head_rmat, _, _, _, _ = tv_wrapper.get_data()
+            
+            # Convert rotation matrix to Euler angles
+            rot = R.from_matrix(head_rmat)
+            euler_angles = rot.as_euler('xyz', degrees=True)
+            
+            # Extract yaw and pitch for camera movement (ignoring roll)
+            # Note: You may need to adjust these values based on your specific setup
+            yaw, pitch = euler_angles[1], euler_angles[0]
+            
+            # Apply scaling and limits to control camera movement sensitivity
+            yaw_scaled = np.clip(yaw * 0.5, -45, 45)   # Scale and limit yaw movement
+            pitch_scaled = np.clip(pitch * 0.5, -30, 30)  # Scale and limit pitch movement
+            
+            logger.debug(f"Head orientation - Yaw: {yaw_scaled:.2f}°, Pitch: {pitch_scaled:.2f}°")
+            
+            try:
+                # Send commands to Dynamixel servos to move the camera
+                agent._robot.command_joint_state([yaw_scaled, pitch_scaled])
+            except Exception as e:
+                logger.warning(f"Failed to command servos: {e}")
+            
+            # Display video feed (optional)
+            try:
+                if np.any(tv_img_array):
+                    resized_image = cv2.resize(tv_img_array, (tv_img_shape[1] // 2, tv_img_shape[0] // 2))
+                    cv2.imshow("Active Camera View", resized_image)
+                    key = cv2.waitKey(1) & 0xFF
+                    if key == ord('q'):
+                        break
+            except Exception as e:
+                logger.warning(f"Error displaying video: {e}")
+            
+            # Maintain target frame rate
+            elapsed = time.time() - start_time
+            sleep_time = max(0, 1.0/30.0 - elapsed)  # Target 30fps
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+            
+            # Periodically log frame rate
+            if logger.isEnabledFor(logging.DEBUG) and (int(time.time()) % 5 == 0):
+                fps = 1.0 / (time.time() - start_time)
+                logger.debug(f"Frame rate: {fps:.2f} fps")
+    
+    except KeyboardInterrupt:
+        logger.info("Keyboard interrupt received, shutting down...")
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+    finally:
+        # Clean up resources
+        agent._robot.set_torque_mode(False)
+        cv2.destroyAllWindows()
+        tv_img_shm.close()
+        tv_img_shm.unlink()
+        logger.info("Resources cleaned up, exiting.")
 
-        # Capture frames from both cameras
-        ret_left, frame_left = left_cam.read()
-        ret_right, frame_right = right_cam.read()
-        
-        if ret_left and ret_right:
-            # Crop frames if needed (similar to the original cropping for ZED camera)
-            frame_left_cropped = frame_left[crop_size_h:, crop_size_w:-crop_size_w]
-            frame_right_cropped = frame_right[crop_size_h:, crop_size_w:-crop_size_w]
-            
-            # Concatenate frames horizontally
-            bgr = np.hstack((frame_left_cropped, frame_right_cropped))
-            
-            # Convert to RGB (same format as expected by the rest of the pipeline)
-            rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
-            
-            # Copy to shared memory for transmission to VR
-            np.copyto(img_array, rgb)
-        else:
-            print("Error reading frames from cameras")
-        
-        end = time.time()
-        # Optionally log frame rate
-        # print(f"Frame rate: {1/(end-start):.2f} fps")
-
-except KeyboardInterrupt:
-    print("Terminating program...")
-finally:
-    # Clean up resources
-    left_cam.release()
-    right_cam.release()
-    agent._robot.set_torque_mode(False)  # Safely turn off torque
-    shm.close()
-    shm.unlink()
-    print("Resources cleaned up, exiting.")
+if __name__ == "__main__":
+    main()
