@@ -110,22 +110,22 @@ class RerunLogger:
         # Add views for camera images
         image_plot_paths = [
                 f"{self.prefix}colors/color_0",
-                f"{self.prefix}colors/color_1",
+                f"{self.prefix}colors/color_1", 
                 f"{self.prefix}colors/color_2",
                 f"{self.prefix}colors/color_3"
                 ]
         for plot_path in image_plot_paths:
-                view = rrb.Spatial2DView(
+            view = rrb.Spatial2DView(
                 origin = plot_path,
                 time_ranges=[
-                rrb.VisibleTimeRange(
-                "idx",
-                start = rrb.TimeRangeBoundary.cursor_relative(seq = -self.IdxRangeBoundary),
-                end = rrb.TimeRangeBoundary.cursor_relative(),
-                )
-        ],
-                )
-        views.append(view)
+                    rrb.VisibleTimeRange(
+                        "idx",
+                        start = rrb.TimeRangeBoundary.cursor_relative(seq = -self.IdxRangeBoundary),
+                        end = rrb.TimeRangeBoundary.cursor_relative(),
+                    )
+                ],
+            )
+            views.append(view)
 
         grid = rrb.Grid(contents = views,
                         grid_columns=4,               # changed from 2 to 4
