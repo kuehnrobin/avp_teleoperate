@@ -262,8 +262,11 @@ if __name__ == '__main__':
                     # dex hand or gripper
                     if args.hand == "dex3":
                         with dual_hand_data_lock:
+                            # The first 7 are joint states, the next 9 are pressures
                             left_hand_state = dual_hand_state_array[:7]
-                            right_hand_state = dual_hand_state_array[-7:]
+                            right_hand_state = dual_hand_state_array[7:14]
+                            left_hand_pressures = dual_hand_state_array[14:23] if len(dual_hand_state_array) >= 23 else [0.0]*9
+                            right_hand_pressures = dual_hand_state_array[23:32] if len(dual_hand_state_array) >= 32 else [0.0]*9
                             left_hand_action = dual_hand_action_array[:7]
                             right_hand_action = dual_hand_action_array[-7:]
                     elif args.hand == "gripper":
@@ -321,11 +324,13 @@ if __name__ == '__main__':
                                 "qpos":   left_hand_state,           
                                 "qvel":   [],                           
                                 "torque": [],                          
+                                "pressures": left_hand_pressures,     # Add pressure data
                             }, 
                             "right_hand": {                                                                    
                                 "qpos":   right_hand_state,       
                                 "qvel":   [],                           
                                 "torque": [],  
+                                "pressures": right_hand_pressures,   # Add pressure data
                             }, 
                             "body": None, 
                         }
