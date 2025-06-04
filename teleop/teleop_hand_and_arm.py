@@ -81,7 +81,9 @@ if __name__ == '__main__':
     parser.add_argument('--verbose', action='store_true', help='Enable verbose logging')
     parser.add_argument('--no-pose-logging', dest='pose_logging', action='store_false', help='Disable background pose logging')
     parser.set_defaults(pose_logging=True)
-    
+    parser.add_argument('--force', action='store_true', help='If set, record real qvel/torque for arms and hands (default: False)')
+    parser.set_defaults(force=False)
+
     args = parser.parse_args()
     
     # Setup logging
@@ -167,14 +169,19 @@ if __name__ == '__main__':
         if args.arm_speed is not None:
             arm_ctrl.arm_velocity_limit = args.arm_speed
 
-    # hand
+    # handbased on the 
     if args.hand == "dex3":
+        # Dynamically set shared array size based on --force
+        if args.force:
+            hand_state_size = 60  # 30 for left, 30 for right
+        else:
+            hand_state_size = 32  # 16 for left, 16 for right
         left_hand_array = Array('d', 75, lock = True)         # [input]
         right_hand_array = Array('d', 75, lock = True)        # [input]
         dual_hand_data_lock = Lock()
-        dual_hand_state_array = Array('d', 14, lock = False)  # [output] current left, right hand state(14) data.
+        dual_hand_state_array = Array('d', hand_state_size, lock = False)  # [output] current left, right hand state
         dual_hand_action_array = Array('d', 14, lock = False) # [output] current left, right hand action(14) data.
-        hand_ctrl = Dex3_1_Controller(left_hand_array, right_hand_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array, networkInterface=args.cyclonedds_uri)
+        hand_ctrl = Dex3_1_Controller(left_hand_array, right_hand_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array, networkInterface=args.cyclonedds_uri, force=args.force)
     elif args.hand == "gripper":
         left_hand_array = Array('d', 75, lock=True)
         right_hand_array = Array('d', 75, lock=True)
@@ -196,7 +203,7 @@ if __name__ == '__main__':
         recorder = EpisodeWriter(task_dir = args.task_dir, frequency = args.frequency, rerun_log = True)
         recording = False
         logger.info(f"Episode recorder initialized with task_dir={args.task_dir}")
-        
+        based on the 
     try:
         user_input = input("Please enter the start signal (enter 'r' to start the subsequent program):\n")
         if user_input.lower() == 'r':
@@ -262,11 +269,26 @@ if __name__ == '__main__':
                     # dex hand or gripper
                     if args.hand == "dex3":
                         with dual_hand_data_lock:
-                            # The first 7 are joint states, the next 9 are pressures
-                            left_hand_state = dual_hand_state_array[:7]
-                            right_hand_state = dual_hand_state_array[7:14]
-                            left_hand_pressures = dual_hand_state_array[14:23] if len(dual_hand_state_array) >= 23 else [0.0]*9
-                            right_hand_pressures = dual_hand_state_array[23:32] if len(dual_hand_state_array) >= 32 else [0.0]*9
+                            if args.force:
+                                # [q0...q6, dq0...dq6, tau0...tau6, p0...p8] (30 each)
+                                left_hand_state = dual_hand_state_array[0:7]
+                                left_hand_vel = dual_hand_state_array[7:14]
+                                left_hand_torque = dual_hand_state_array[14:21]
+                                left_hand_pressures = dual_hand_state_array[21:30]
+                                right_hand_state = dual_hand_state_array[30:37]
+                                right_hand_vel = dual_hand_state_array[37:44]
+                                right_hand_torque = dual_hand_state_array[44:51]
+                                right_hand_pressures = dual_hand_state_array[51:60]
+                            else:
+                                # [q0...q6, p0...p8] (16 each)
+                                left_hand_state = dual_hand_state_array[0:7]
+                                left_hand_vel = [0.0]*7
+                                left_hand_torque = [0.0]*7
+                                left_hand_pressures = dual_hand_state_array[7:16]
+                                right_hand_state = dual_hand_state_array[16:23]
+                                right_hand_vel = [0.0]*7
+                                right_hand_torque = [0.0]*7
+                                right_hand_pressures = dual_hand_state_array[23:32]
                             left_hand_action = dual_hand_action_array[:7]
                             right_hand_action = dual_hand_action_array[-7:]
                     elif args.hand == "gripper":
@@ -294,6 +316,20 @@ if __name__ == '__main__':
                     right_arm_state = current_lr_arm_q[-7:]
                     left_arm_action = sol_q[:7]
                     right_arm_action = sol_q[-7:]
+                    # Get velocities and torques for arms
+                    left_arm_vel  = current_lr_arm_dq[:7] if (args.force and len(current_lr_arm_dq) >= 14) else [0.0]*7
+                    right_arm_vel = current_lr_arm_dq[-7:] if (args.force and len(current_lr_arm_dq) >= 14) else [0.0]*7
+                    # Try to get torques if available
+                    try:
+                        current_lr_arm_torque = arm_ctrl.get_current_dual_arm_torque() if args.force else None
+                        left_arm_torque = current_lr_arm_torque[:7] if current_lr_arm_torque is not None else [0.0]*7
+                        right_arm_torque = current_lr_arm_torque[-7:] if current_lr_arm_torque is not None else [0.0]*7
+                    except Exception:
+                        left_arm_torque = [0.0]*7
+                        right_arm_torque = [0.0]*7
+                    # For hands, fill with zeros (or update if you have access to velocities/torques)
+                    left_hand_torque = [0.0]*len(left_hand_state)
+                    right_hand_torque = [0.0]*len(right_hand_state)
 
                     if recording:
                         colors = {}
@@ -312,24 +348,24 @@ if __name__ == '__main__':
                         states = {
                             "left_arm": {                                                                    
                                 "qpos":   left_arm_state.tolist(),    # numpy.array -> list
-                                "qvel":   [],                          
-                                "torque": [],                        
+                                "qvel":   left_arm_vel if isinstance(left_arm_vel, list) else left_arm_vel.tolist(),
+                                "torque": left_arm_torque if isinstance(left_arm_torque, list) else left_arm_torque.tolist(),                        
                             }, 
                             "right_arm": {                                                                    
                                 "qpos":   right_arm_state.tolist(),       
-                                "qvel":   [],                          
-                                "torque": [],                         
+                                "qvel":   right_arm_vel if isinstance(right_arm_vel, list) else right_arm_vel.tolist(),
+                                "torque": right_arm_torque if isinstance(right_arm_torque, list) else right_arm_torque.tolist(),                         
                             },                        
                             "left_hand": {                                                                    
                                 "qpos":   left_hand_state,           
-                                "qvel":   [],                           
-                                "torque": [],                          
+                                "qvel":   left_hand_vel,                           
+                                "torque": left_hand_torque,                          
                                 "pressures": left_hand_pressures,     # Add pressure data
                             }, 
                             "right_hand": {                                                                    
                                 "qpos":   right_hand_state,       
-                                "qvel":   [],                           
-                                "torque": [],  
+                                "qvel":   right_hand_vel,                           
+                                "torque": right_hand_torque,  
                                 "pressures": right_hand_pressures,   # Add pressure data
                             }, 
                             "body": None, 
