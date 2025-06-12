@@ -173,9 +173,9 @@ if __name__ == '__main__':
     if args.hand == "dex3":
         # Dynamically set shared array size based on --force
         if args.force:
-            hand_state_size = 60  # 30 for left, 30 for right
+            hand_state_size = 66  # 33 for left, 33 for right
         else:
-            hand_state_size = 32  # 16 for left, 16 for right
+            hand_state_size = 38  # 19 for left, 19 for right
         left_hand_array = Array('d', 75, lock = True)         # [input]
         right_hand_array = Array('d', 75, lock = True)        # [input]
         dual_hand_data_lock = Lock()
@@ -202,8 +202,7 @@ if __name__ == '__main__':
     if args.record:
         recorder = EpisodeWriter(task_dir = args.task_dir, frequency = args.frequency, rerun_log = True)
         recording = False
-        logger.info(f"Episode recorder initialized with task_dir={args.task_dir}")
-        based on the 
+        logger.info(f"Episode recorder initialized with task_dir={args.task_dir}") 
     try:
         user_input = input("Please enter the start signal (enter 'r' to start the subsequent program):\n")
         if user_input.lower() == 'r':
@@ -270,25 +269,25 @@ if __name__ == '__main__':
                     if args.hand == "dex3":
                         with dual_hand_data_lock:
                             if args.force:
-                                # [q0...q6, dq0...dq6, tau0...tau6, p0...p8] (30 each)
+                                # [q0...q6, dq0...dq6, tau0...tau6, p0...p11] (33 each)
                                 left_hand_state = dual_hand_state_array[0:7]
                                 left_hand_vel = dual_hand_state_array[7:14]
                                 left_hand_torque = dual_hand_state_array[14:21]
-                                left_hand_pressures = dual_hand_state_array[21:30]
-                                right_hand_state = dual_hand_state_array[30:37]
-                                right_hand_vel = dual_hand_state_array[37:44]
-                                right_hand_torque = dual_hand_state_array[44:51]
-                                right_hand_pressures = dual_hand_state_array[51:60]
+                                left_hand_pressures = dual_hand_state_array[21:33]
+                                right_hand_state = dual_hand_state_array[33:40]
+                                right_hand_vel = dual_hand_state_array[40:47]
+                                right_hand_torque = dual_hand_state_array[47:54]
+                                right_hand_pressures = dual_hand_state_array[54:66]
                             else:
-                                # [q0...q6, p0...p8] (16 each)
+                                # [q0...q6, p0...p11] (19 each)
                                 left_hand_state = dual_hand_state_array[0:7]
                                 left_hand_vel = [0.0]*7
                                 left_hand_torque = [0.0]*7
-                                left_hand_pressures = dual_hand_state_array[7:16]
-                                right_hand_state = dual_hand_state_array[16:23]
+                                left_hand_pressures = dual_hand_state_array[7:19]
+                                right_hand_state = dual_hand_state_array[19:26]
                                 right_hand_vel = [0.0]*7
                                 right_hand_torque = [0.0]*7
-                                right_hand_pressures = dual_hand_state_array[23:32]
+                                right_hand_pressures = dual_hand_state_array[26:38]
                             left_hand_action = dual_hand_action_array[:7]
                             right_hand_action = dual_hand_action_array[-7:]
                     elif args.hand == "gripper":
@@ -297,12 +296,28 @@ if __name__ == '__main__':
                             right_hand_state = [dual_gripper_state_array[0]]
                             left_hand_action = [dual_gripper_action_array[1]]
                             right_hand_action = [dual_gripper_action_array[0]]
+                            # No pressure sensors for gripper
+                            left_hand_pressures = []
+                            right_hand_pressures = []
+                            # Add velocities and torques for gripper
+                            left_hand_vel = [0.0]*len(left_hand_state)
+                            right_hand_vel = [0.0]*len(right_hand_state)
+                            left_hand_torque = [0.0]*len(left_hand_state)
+                            right_hand_torque = [0.0]*len(right_hand_state)
                     elif args.hand == "inspire1":
                         with dual_hand_data_lock:
                             left_hand_state = dual_hand_state_array[:6]
                             right_hand_state = dual_hand_state_array[-6:]
                             left_hand_action = dual_hand_action_array[:6]
                             right_hand_action = dual_hand_action_array[-6:]
+                            # No pressure sensors for inspire hand
+                            left_hand_pressures = []
+                            right_hand_pressures = []
+                            # Add velocities and torques for inspire hand
+                            left_hand_vel = [0.0]*len(left_hand_state)
+                            right_hand_vel = [0.0]*len(right_hand_state)
+                            left_hand_torque = [0.0]*len(left_hand_state)
+                            right_hand_torque = [0.0]*len(right_hand_state)
                     else:
                         print("No dexterous hand set.")
                         pass

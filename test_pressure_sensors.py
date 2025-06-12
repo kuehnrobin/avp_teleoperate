@@ -121,7 +121,7 @@ class PressureSensorTest:
         print("="*60)
         
         # Left hand data
-        print("\nLEFT HAND:")ssh unitree@192.168.12.1
+        print("\nLEFT HAND:")
 
         print(f"Pressures:     {[f'{p:.3f}' for p in self.left_pressure_data]}")
         print(f"Temperatures:  {[f'{t:.3f}' for t in self.left_temperature_data]}")
