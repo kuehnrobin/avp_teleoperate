@@ -240,22 +240,53 @@ if __name__ == '__main__':
                     logger.info(f"IK solve time: {(time_ik_end - time_ik_start)*1000:.2f}ms")
 
                 tv_resized_image = cv2.resize(tv_img_array, (tv_img_shape[1] // 2, tv_img_shape[0] // 2))
+                
+                # Add recording status overlay
+                if args.record:
+                    status_text = ""
+                    help_text = ""
+                    if recording:
+                        status_text = "RECORDING"
+                        help_text = "Controls: [r]=abort | [q]=save optimal | [w]=save suboptimal | [e]=save recovery"
+                    else:
+                        status_text = "READY TO RECORD"
+                        help_text = "Controls: [s]=start recording | [q]=quit (no recording) | [ESC]=quit"
+                    
+                    # Add status text overlay
+                    cv2.putText(tv_resized_image, status_text, (10, 30), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255) if recording else (0, 255, 0), 2)
+                    
+                    # Add help text overlay
+                    cv2.putText(tv_resized_image, help_text, (10, 60), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                
                 cv2.imshow("record image", tv_resized_image)
                 key = cv2.waitKey(1) & 0xFF
-                if key == ord('q'):
+                
+                # Handle key presses for recording control
+                if key == 27 and not args.record:
                     running = False
-                    logger.info("User requested exit with 'q' key")
-                elif key == ord('s') and args.record:
-                    recording = not recording # state flipping
-                    if recording:
-                        if not recorder.create_episode():
-                            recording = False
-                            logger.warning("Failed to create recording episode")
-                        else:
+                    logger.info("User requested exit with 'ESC' key")
+                elif args.record:
+                    if key == ord('s') and not recording:
+                        # Start recording
+                        if recorder.create_episode():
+                            recording = True
                             logger.info("Started recording episode")
-                    else:
-                        recorder.save_episode()
-                        logger.info("Saved recording episode")
+                        else:
+                            logger.warning("Failed to create recording episode")
+                    elif key == ord('r') and recording:
+                        # Abort recording
+                        recorder.abort_episode()
+                        recording = False
+                        logger.info("Aborted recording episode")
+                    elif recording and key in [ord('q'), ord('w'), ord('e')]:
+                        # Save with quality labels
+                        quality_map = {ord('q'): 'optimal', ord('w'): 'suboptimal', ord('e'): 'recovery'}
+                        quality = quality_map[key]
+                        recorder.save_episode(quality=quality)
+                        recording = False
+                        logger.info(f"Saved recording episode with quality: {quality}")
 
                 # record data
                 if args.record:

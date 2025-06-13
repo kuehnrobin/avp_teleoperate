@@ -4,6 +4,7 @@ import json
 import datetime
 import numpy as np
 import time
+import shutil
 from .rerun_visualizer import RerunLogger
 from queue import Queue, Empty
 from threading import Thread
@@ -197,12 +198,45 @@ class EpisodeWriter():
             except Exception as e:
                 print(f"Warning: RerunLogger encountered an issue: {e}")
 
-    def save_episode(self):
+    def save_episode(self, quality=None):
         """
         Trigger the save operation. This sets the save flag, and the process_queue thread will handle it.
+        
+        Args:
+            quality (str): Quality label for the episode ('optimal', 'suboptimal', 'recovery')
         """
+        self.quality_label = quality
         self.need_save = True  # Set the save flag
-        print(f"==> Episode saved start...")
+        print(f"==> Episode save started with quality: {quality}...")
+
+    def abort_episode(self):
+        """
+        Abort the current episode recording without saving.
+        """
+        if not self.is_available:
+            print(f"==> Aborting episode {self.episode_id}...")
+            # Clear the queue
+            while not self.item_data_queue.empty():
+                try:
+                    self.item_data_queue.get_nowait()
+                    self.item_data_queue.task_done()
+                except:
+                    break
+            
+            # Remove the episode directory if it exists
+            if hasattr(self, 'episode_dir') and os.path.exists(self.episode_dir):
+                shutil.rmtree(self.episode_dir)
+                print(f"==> Episode directory removed: {self.episode_dir}")
+            
+            # Reset state
+            self.episode_data = []
+            self.item_id = -1
+            self.episode_id = self.episode_id - 1  # Revert episode ID
+            self.is_available = True
+            self.need_save = False
+            print(f"==> Episode aborted successfully.")
+        else:
+            print(f"==> No active episode to abort.")
 
     def _save_episode(self):
         """
@@ -210,10 +244,14 @@ class EpisodeWriter():
         """
         self.data['info'] = self.info
         self.data['text'] = self.text
+        # Add quality label if provided
+        if hasattr(self, 'quality_label') and self.quality_label:
+            self.data['quality'] = self.quality_label
         self.data['data'] = self.episode_data
         with open(self.json_path, 'w', encoding='utf-8') as jsonf:
             jsonf.write(json.dumps(self.data, indent=4, ensure_ascii=False))
         self.need_save = False     # Reset the save flag
+        self.quality_label = None  # Reset quality label
         self.is_available = True   # Mark the class as available after saving
         print(f"==> Episode saved successfully to {self.json_path}.")
 
