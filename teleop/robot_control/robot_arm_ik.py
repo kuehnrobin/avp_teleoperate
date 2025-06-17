@@ -22,7 +22,7 @@ class G1_29_ArmIK:
         self.Visualization = Visualization
 
         if not self.Unit_Test:
-            self.robot = pin.RobotWrapper.BuildFromURDF('../assets/g1/g1_body29_hand14.urdf', '../assets/g1/')
+            self.robot = pin.RobotWrapper.BuildFromURDF('assets/g1/g1_body29_hand14.urdf', 'assets/g1/')
         else:
             self.robot = pin.RobotWrapper.BuildFromURDF('../../assets/g1/g1_body29_hand14.urdf', '../../assets/g1/') # for test
 

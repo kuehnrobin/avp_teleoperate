@@ -4,15 +4,15 @@ import yaml
 from enum import Enum
 
 class HandType(Enum):
-    INSPIRE_HAND = "../assets/inspire_hand/inspire_hand.yml"
-    INSPIRE_HAND_Unit_Test = "../../assets/inspire_hand/inspire_hand.yml"
-    UNITREE_DEX3 = "../assets/unitree_hand/unitree_dex3.yml"
+    INSPIRE_HAND = "assets/inspire_hand/inspire_hand.yml"
+    INSPIRE_HAND_Unit_Test = "../assets/inspire_hand/inspire_hand.yml"
+    UNITREE_DEX3 = "assets/unitree_hand/unitree_dex3.yml"
     UNITREE_DEX3_Unit_Test = "../../assets/unitree_hand/unitree_dex3.yml"
 
 class HandRetargeting:
     def __init__(self, hand_type: HandType):
         if hand_type == HandType.UNITREE_DEX3:
-            RetargetingConfig.set_default_urdf_dir('../assets')
+            RetargetingConfig.set_default_urdf_dir('assets')
         elif hand_type == HandType.UNITREE_DEX3_Unit_Test:
             RetargetingConfig.set_default_urdf_dir('../../assets')
         elif hand_type == HandType.INSPIRE_HAND:

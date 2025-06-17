@@ -12,25 +12,14 @@ This Guid explains how to start the Hand Teleoperation with the Meta Quest 3.
     python teleop_hand_and_arm.py --arm=G1_29 --hand=dex3 --cyclonedds_uri=enxa0cec8616f27 --record
 
     Reccomended: limit speed
-    python teleop_hand_and_arm.py --arm=G1_29 --hand=dex3 --arm-speed=10.0 --no-gradual-speed --cyclonedds_uri=enxa0cec8616f27 --record
+    python teleop_hand_and_arm.py --arm=G1_29 --hand=dex3 --arm-speed=10.0 --no-gradual-speed --cyclonedds_uri=enxa0cec8616f27 --record --force
 
     Note: press s in the OpenCV window (with the camera image) to start /stop recording an episode and q to stop
 
 
     ngrok http 8012
 
-    adb reverse tcp:8012 tcp:8012
-
-If the --record parameter is used, Operator B can press s key in the opened "record image" window to start recording data, and press s again to stop. This operation can be repeated as needed for multiple recordings.
-
-To exit the program, Operator B can press the q key in the 'record image' window.
-
-## Check Host machine local ip address:
-
-    ~/avp_teleoperate$ ifconfig | grep inet
-
-## Run ngrok
-
+    adb reverse tcp:8012 tcp:8012 
     ngrok http 8012
 
 ### Static domain
