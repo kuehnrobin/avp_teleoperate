@@ -105,7 +105,44 @@ p.s.1 Recorded data is stored in avp_teleoperate/teleop/utils/data by default, w
 
 p.s.2 Please pay attention to your disk space size during data recording.
 
+## Enhanced Recording Controls
 
+The recording system has been improved with more flexible controls and quality labeling. When using the `--record` parameter, you can now:
+
+### Key Controls (in the OpenCV "record image" window):
+
+**When NOT recording:**
+- **`s`** - Start recording a new episode
+- **`ESC`** - Quit the program (no recording mode)
+
+
+**When RECORDING:**
+- **`r`** - Abort and delete the current recording (no save)
+- **`q`** - Save episode with quality label "optimal"
+- **`w`** - Save episode with quality label "suboptimal"  
+- **`e`** - Save episode with quality label "recovery"
+
+### Visual Feedback:
+- The recording window displays the current status (READY TO RECORD / RECORDING)
+- Available controls are shown on screen for easy reference
+- Recording status is color-coded (green for ready, red for recording)
+
+### Quality Labels:
+Episodes are now saved with quality metadata in the `data.json` file:
+- **"optimal"** - High-quality demonstrations for training
+- **"suboptimal"** - Lower quality but still usable data
+- **"recovery"** - Recovery behaviors or edge cases
+
+This allows for better data curation and filtering during training.
+
+### Workflow Example:
+1. Press `s` to start recording
+2. Perform the demonstration
+3. Choose outcome:
+   - Press `q` for good demonstrations (optimal quality)
+   - Press `w` for acceptable demonstrations (suboptimal quality)
+   - Press `e` for recovery/emergency behaviors (recovery quality)
+   - Press `r` to discard bad demonstrations entirely
 
 # Hot to setup the Package
 
