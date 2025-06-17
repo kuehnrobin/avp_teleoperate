@@ -10,7 +10,7 @@ class HandType(Enum):
     UNITREE_DEX3_Unit_Test = "../../assets/unitree_hand/unitree_dex3.yml"
 
 class HandRetargeting:
-    def __init__(self, hand_type: HandType):
+    def __init__(self, hand_type: HandType, retargeting_method: str = 'vector'):
         if hand_type == HandType.UNITREE_DEX3:
             RetargetingConfig.set_default_urdf_dir('assets')
         elif hand_type == HandType.UNITREE_DEX3_Unit_Test:
@@ -28,6 +28,20 @@ class HandRetargeting:
                 
             if 'left' not in self.cfg or 'right' not in self.cfg:
                 raise ValueError("Configuration file must contain 'left' and 'right' keys.")
+
+            # Override the retargeting method from command line
+            self.cfg['left']['type'] = retargeting_method
+            self.cfg['right']['type'] = retargeting_method
+            
+            # Add required parameters for dexpilot if selected
+            if retargeting_method == 'dexpilot':
+                if hand_type in [HandType.UNITREE_DEX3, HandType.UNITREE_DEX3_Unit_Test]:
+                    # Set dexpilot-specific parameters for Unitree Dex3
+                    for hand_side in ['left', 'right']:
+                        self.cfg[hand_side]['wrist_link_name'] = 'base_link'
+                        self.cfg[hand_side]['finger_tip_link_names'] = ['thumb_tip', 'index_tip', 'middle_tip']
+                        self.cfg[hand_side]['project_dist'] = 0.03
+                        self.cfg[hand_side]['escape_dist'] = 0.05
 
             left_retargeting_config = RetargetingConfig.from_dict(self.cfg['left'])
             right_retargeting_config = RetargetingConfig.from_dict(self.cfg['right'])

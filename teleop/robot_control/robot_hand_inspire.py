@@ -17,14 +17,14 @@ kTopicInspireState = "rt/inspire/state"
 
 class Inspire_Controller:
     def __init__(self, left_hand_array, right_hand_array, dual_hand_data_lock = None, dual_hand_state_array = None,
-                       dual_hand_action_array = None, fps = 100.0, Unit_Test = False):
+                       dual_hand_action_array = None, fps = 100.0, Unit_Test = False, retargeting_method='vector'):
         print("Initialize Inspire_Controller...")
         self.fps = fps
         self.Unit_Test = Unit_Test
         if not self.Unit_Test:
-            self.hand_retargeting = HandRetargeting(HandType.INSPIRE_HAND)
+            self.hand_retargeting = HandRetargeting(HandType.INSPIRE_HAND, retargeting_method)
         else:
-            self.hand_retargeting = HandRetargeting(HandType.INSPIRE_HAND_Unit_Test)
+            self.hand_retargeting = HandRetargeting(HandType.INSPIRE_HAND_Unit_Test, retargeting_method)
             ChannelFactoryInitialize(0)
 
         # initialize handcmd publisher and handstate subscriber

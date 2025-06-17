@@ -69,6 +69,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--arm', type=str, choices=['G1_29', 'G1_23', 'H1_2', 'H1'], default='G1_29', help='Select arm controller')
     parser.add_argument('--hand', type=str, choices=['dex3', 'gripper', 'inspire1'], help='Select hand controller')
+    parser.add_argument('--retargeting-method', type=str, choices=['vector', 'dexpilot'], default='vector', 
+                      help='Select hand retargeting method: vector (default) or dexpilot')
 
     parser.add_argument('--cyclonedds_uri', type=str, default='enxa0cec8616f27', help='Network interface for CycloneDDS (default: enxa0cec8616f27)')
     # Speed Limit
@@ -181,7 +183,7 @@ if __name__ == '__main__':
         dual_hand_data_lock = Lock()
         dual_hand_state_array = Array('d', hand_state_size, lock = False)  # [output] current left, right hand state
         dual_hand_action_array = Array('d', 14, lock = False) # [output] current left, right hand action(14) data.
-        hand_ctrl = Dex3_1_Controller(left_hand_array, right_hand_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array, networkInterface=args.cyclonedds_uri, force=args.force)
+        hand_ctrl = Dex3_1_Controller(left_hand_array, right_hand_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array, networkInterface=args.cyclonedds_uri, force=args.force, retargeting_method=args.retargeting_method)
     elif args.hand == "gripper":
         left_hand_array = Array('d', 75, lock=True)
         right_hand_array = Array('d', 75, lock=True)
@@ -195,7 +197,7 @@ if __name__ == '__main__':
         dual_hand_data_lock = Lock()
         dual_hand_state_array = Array('d', 12, lock = False)   # [output] current left, right hand state(12) data.
         dual_hand_action_array = Array('d', 12, lock = False)  # [output] current left, right hand action(12) data.
-        hand_ctrl = Inspire_Controller(left_hand_array, right_hand_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array)
+        hand_ctrl = Inspire_Controller(left_hand_array, right_hand_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array, retargeting_method=args.retargeting_method)
     else:
         pass
     

@@ -39,7 +39,7 @@ kTopicDex3RightState = "rt/dex3/right/state"
 
 class Dex3_1_Controller:
     def __init__(self, left_hand_array, right_hand_array, dual_hand_data_lock = None, dual_hand_state_array = None,
-                       dual_hand_action_array = None, fps = 100.0, Unit_Test = False, networkInterface='enxa0cec8616f27', force=False):
+                       dual_hand_action_array = None, fps = 100.0, Unit_Test = False, networkInterface='enxa0cec8616f27', force=False, retargeting_method='vector'):
         """
         [note] A *_array type parameter requires using a multiprocessing Array, because it needs to be passed to the internal child process.
         If force=True, shared array layout is [q0...q6, dq0...dq6, tau0...tau6, p0...p11] (33).
@@ -69,9 +69,9 @@ class Dex3_1_Controller:
         else:
             self.shared_array_size = 19  # [q0...q6, p0...p11]
         if not self.Unit_Test:
-            self.hand_retargeting = HandRetargeting(HandType.UNITREE_DEX3)
+            self.hand_retargeting = HandRetargeting(HandType.UNITREE_DEX3, retargeting_method)
         else:
-            self.hand_retargeting = HandRetargeting(HandType.UNITREE_DEX3_Unit_Test)
+            self.hand_retargeting = HandRetargeting(HandType.UNITREE_DEX3_Unit_Test, retargeting_method)
             ChannelFactoryInitialize(0, networkInterface)
 
         # initialize handcmd publisher and handstate subscriber
@@ -487,7 +487,7 @@ if __name__ == "__main__":
         dual_hand_data_lock = Lock()
         dual_hand_state_array = Array('d', 14, lock=False)  # current left, right hand state(14) data.
         dual_hand_action_array = Array('d', 14, lock=False) # current left, right hand action(14) data.
-        hand_ctrl = Dex3_1_Controller(left_hand_array, right_hand_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array, Unit_Test = True)
+        hand_ctrl = Dex3_1_Controller(left_hand_array, right_hand_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array, Unit_Test = True, retargeting_method='vector')
     else:
         left_hand_array = Array('d', 75, lock=True)
         right_hand_array = Array('d', 75, lock=True)
