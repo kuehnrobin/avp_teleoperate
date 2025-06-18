@@ -58,8 +58,18 @@ class HandRetargeting:
             self.left_retargeting = left_retargeting_config.build()
             self.right_retargeting = right_retargeting_config.build()
 
-            self.left_retargeting_joint_names = self.left_retargeting.joint_names
-            self.right_retargeting_joint_names = self.right_retargeting.joint_names
+            # For DexPilot, joint_names may not be available in the same way
+            try:
+                self.left_retargeting_joint_names = self.left_retargeting.joint_names
+                self.right_retargeting_joint_names = self.right_retargeting.joint_names
+            except AttributeError:
+                # DexPilot doesn't have joint_names, it works with fingertip positions
+                if retargeting_method == 'dexpilot':
+                    # For DexPilot, we work with fingertip positions, not joint names
+                    self.left_retargeting_joint_names = ['thumb_tip', 'index_tip', 'middle_tip']
+                    self.right_retargeting_joint_names = ['thumb_tip', 'index_tip', 'middle_tip']
+                else:
+                    raise
 
             if hand_type == HandType.UNITREE_DEX3 or hand_type == HandType.UNITREE_DEX3_Unit_Test:
                 # In section "Sort by message structure" of https://support.unitree.com/home/en/G1_developer/dexterous_hand
@@ -69,8 +79,17 @@ class HandRetargeting:
                 self.right_dex3_api_joint_names = [ 'right_hand_thumb_0_joint', 'right_hand_thumb_1_joint', 'right_hand_thumb_2_joint',
                                                     'right_hand_middle_0_joint', 'right_hand_middle_1_joint',
                                                     'right_hand_index_0_joint', 'right_hand_index_1_joint' ]
-                self.left_dex_retargeting_to_hardware = [ self.left_retargeting_joint_names.index(name) for name in self.left_dex3_api_joint_names]
-                self.right_dex_retargeting_to_hardware = [ self.right_retargeting_joint_names.index(name) for name in self.right_dex3_api_joint_names]
+                
+                # For DexPilot, we need different handling since it uses fingertip positions, not joint angles
+                if retargeting_method == 'dexpilot':
+                    # DexPilot works with fingertip positions, so we need to map from retargeting output to hardware joints
+                    # The retargeting library will output positions for the 3 fingertips defined in the YAML
+                    self.left_dex_retargeting_to_hardware = list(range(len(self.left_dex3_api_joint_names)))
+                    self.right_dex_retargeting_to_hardware = list(range(len(self.right_dex3_api_joint_names)))
+                else:
+                    # For vector retargeting, map joint names directly
+                    self.left_dex_retargeting_to_hardware = [ self.left_retargeting_joint_names.index(name) for name in self.left_dex3_api_joint_names]
+                    self.right_dex_retargeting_to_hardware = [ self.right_retargeting_joint_names.index(name) for name in self.right_dex3_api_joint_names]
 
                 # Archive: This is the joint order of the dex-retargeting library version 0.1.1.
                 # print([joint.get_name() for joint in self.left_retargeting.optimizer.robot.get_active_joints()])
