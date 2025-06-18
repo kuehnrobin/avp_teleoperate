@@ -314,12 +314,12 @@ if __name__ == '__main__':
                             else:
                                 # [q0...q6, p0...p11] (19 each)
                                 left_hand_state = dual_hand_state_array[0:7]
-                                left_hand_vel = [0.0]*7
-                                left_hand_torque = [0.0]*7
+                                left_hand_vel = []  # Not available without --force
+                                left_hand_torque = []  # Not available without --force
                                 left_hand_pressures = dual_hand_state_array[7:19]
                                 right_hand_state = dual_hand_state_array[19:26]
-                                right_hand_vel = [0.0]*7
-                                right_hand_torque = [0.0]*7
+                                right_hand_vel = []  # Not available without --force
+                                right_hand_torque = []  # Not available without --force
                                 right_hand_pressures = dual_hand_state_array[26:38]
                             left_hand_action = dual_hand_action_array[:7]
                             right_hand_action = dual_hand_action_array[-7:]
@@ -333,10 +333,10 @@ if __name__ == '__main__':
                             left_hand_pressures = []
                             right_hand_pressures = []
                             # Add velocities and torques for gripper
-                            left_hand_vel = [0.0]*len(left_hand_state)
-                            right_hand_vel = [0.0]*len(right_hand_state)
-                            left_hand_torque = [0.0]*len(left_hand_state)
-                            right_hand_torque = [0.0]*len(right_hand_state)
+                            left_hand_vel = []
+                            right_hand_vel = []
+                            left_hand_torque = []
+                            right_hand_torque = []
                     elif args.hand == "inspire1":
                         with dual_hand_data_lock:
                             left_hand_state = dual_hand_state_array[:6]
@@ -347,10 +347,10 @@ if __name__ == '__main__':
                             left_hand_pressures = []
                             right_hand_pressures = []
                             # Add velocities and torques for inspire hand
-                            left_hand_vel = [0.0]*len(left_hand_state)
-                            right_hand_vel = [0.0]*len(right_hand_state)
-                            left_hand_torque = [0.0]*len(left_hand_state)
-                            right_hand_torque = [0.0]*len(right_hand_state)
+                            left_hand_vel = []
+                            right_hand_vel = []
+                            left_hand_torque = []
+                            right_hand_torque = []
                     else:
                         print("No dexterous hand set.")
                         pass
@@ -365,19 +365,18 @@ if __name__ == '__main__':
                     left_arm_action = sol_q[:7]
                     right_arm_action = sol_q[-7:]
                     # Get velocities and torques for arms
-                    left_arm_vel  = current_lr_arm_dq[:7] if (args.force and len(current_lr_arm_dq) >= 14) else [0.0]*7
-                    right_arm_vel = current_lr_arm_dq[-7:] if (args.force and len(current_lr_arm_dq) >= 14) else [0.0]*7
+                    left_arm_vel  = current_lr_arm_dq[:7] if (args.force and len(current_lr_arm_dq) >= 14) else []
+                    right_arm_vel = current_lr_arm_dq[-7:] if (args.force and len(current_lr_arm_dq) >= 14) else []
                     # Try to get torques if available
                     try:
-                        current_lr_arm_torque = arm_ctrl.get_current_dual_arm_torque() if args.force else None
-                        left_arm_torque = current_lr_arm_torque[:7] if current_lr_arm_torque is not None else [0.0]*7
-                        right_arm_torque = current_lr_arm_torque[-7:] if current_lr_arm_torque is not None else [0.0]*7
+                        current_lr_arm_torque = arm_ctrl.get_current_dual_arm_torque()
+                        left_arm_torque = current_lr_arm_torque[:7] if current_lr_arm_torque is not None else []
+                        right_arm_torque = current_lr_arm_torque[-7:] if current_lr_arm_torque is not None else []
                     except Exception:
-                        left_arm_torque = [0.0]*7
-                        right_arm_torque = [0.0]*7
-                    # For hands, fill with zeros (or update if you have access to velocities/torques)
-                    left_hand_torque = [0.0]*len(left_hand_state)
-                    right_hand_torque = [0.0]*len(right_hand_state)
+                        left_arm_torque = []
+                        right_arm_torque = []
+                    
+                    # Note: Hand torque and velocity values are already collected above in the hand-specific sections
 
                     if recording:
                         colors = {}
@@ -396,24 +395,24 @@ if __name__ == '__main__':
                         states = {
                             "left_arm": {                                                                    
                                 "qpos":   left_arm_state.tolist(),    # numpy.array -> list
-                                "qvel":   left_arm_vel if isinstance(left_arm_vel, list) else left_arm_vel.tolist(), # is this data usefull?
-                                "torque": [],                        
+                                "qvel":   left_arm_vel if isinstance(left_arm_vel, list) else left_arm_vel.tolist(),
+                                "torque": left_arm_torque if isinstance(left_arm_torque, list) else left_arm_torque.tolist(),                        
                             }, 
                             "right_arm": {                                                                    
                                 "qpos":   right_arm_state.tolist(),       
-                                "qvel":   right_arm_vel if isinstance(right_arm_vel, list) else right_arm_vel.tolist(), # is this data usefull?
-                                "torque": [],                         
+                                "qvel":   right_arm_vel if isinstance(right_arm_vel, list) else right_arm_vel.tolist(),
+                                "torque": right_arm_torque if isinstance(right_arm_torque, list) else right_arm_torque.tolist(),                         
                             },                        
                             "left_hand": {                                                                    
                                 "qpos":   left_hand_state,           
-                                "qvel":   [],                          
-                                "torque": [],                          
+                                "qvel":   left_hand_vel if isinstance(left_hand_vel, list) else left_hand_vel,                          
+                                "torque": left_hand_torque if isinstance(left_hand_torque, list) else left_hand_torque,                          
                                 "pressures": left_hand_pressures,     # Add pressure data
                             }, 
                             "right_hand": {                                                                    
                                 "qpos":   right_hand_state,       
-                                "qvel":   [],                          
-                                "torque": [], 
+                                "qvel":   right_hand_vel if isinstance(right_hand_vel, list) else right_hand_vel,                          
+                                "torque": right_hand_torque if isinstance(right_hand_torque, list) else right_hand_torque, 
                                 "pressures": right_hand_pressures,   # Add pressure data
                             }, 
                             "body": None, # TODO Hier könnte man um den Körper Erweitern

@@ -25,6 +25,7 @@ class MotorState:
     def __init__(self):
         self.q = None
         self.dq = None
+        self.tau_est = None
 
 class G1_29_LowState:
     def __init__(self):
@@ -144,6 +145,7 @@ class G1_29_ArmController:
                 for id in range(G1_29_Num_Motors):
                     lowstate.motor_state[id].q  = msg.motor_state[id].q
                     lowstate.motor_state[id].dq = msg.motor_state[id].dq
+                    lowstate.motor_state[id].tau_est = msg.motor_state[id].tau_est
                 self.lowstate_buffer.SetData(lowstate)
             time.sleep(0.002)
 
@@ -412,6 +414,7 @@ class G1_23_ArmController:
                 for id in range(G1_23_Num_Motors):
                     lowstate.motor_state[id].q  = msg.motor_state[id].q
                     lowstate.motor_state[id].dq = msg.motor_state[id].dq
+                    lowstate.motor_state[id].tau_est = msg.motor_state[id].tau_est
                 self.lowstate_buffer.SetData(lowstate)
             time.sleep(0.002)
 
@@ -672,6 +675,7 @@ class H1_2_ArmController:
                 for id in range(H1_2_Num_Motors):
                     lowstate.motor_state[id].q  = msg.motor_state[id].q
                     lowstate.motor_state[id].dq = msg.motor_state[id].dq
+                    lowstate.motor_state[id].tau_est = msg.motor_state[id].tau_est
                 self.lowstate_buffer.SetData(lowstate)
             time.sleep(0.002)
 
@@ -931,6 +935,7 @@ class H1_ArmController:
                 for id in range(H1_Num_Motors):
                     lowstate.motor_state[id].q  = msg.motor_state[id].q
                     lowstate.motor_state[id].dq = msg.motor_state[id].dq
+                    lowstate.motor_state[id].tau_est = msg.motor_state[id].tau_est
                 self.lowstate_buffer.SetData(lowstate)
             time.sleep(0.002)
 
