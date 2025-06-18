@@ -396,29 +396,29 @@ if __name__ == '__main__':
                         states = {
                             "left_arm": {                                                                    
                                 "qpos":   left_arm_state.tolist(),    # numpy.array -> list
-                                "qvel":   left_arm_vel if isinstance(left_arm_vel, list) else left_arm_vel.tolist(),
-                                "torque": left_arm_torque if isinstance(left_arm_torque, list) else left_arm_torque.tolist(),                        
+                                "qvel":   left_arm_vel if isinstance(left_arm_vel, list) else left_arm_vel.tolist(), # is this data usefull?
+                                "torque": [],                        
                             }, 
                             "right_arm": {                                                                    
                                 "qpos":   right_arm_state.tolist(),       
-                                "qvel":   right_arm_vel if isinstance(right_arm_vel, list) else right_arm_vel.tolist(),
-                                "torque": right_arm_torque if isinstance(right_arm_torque, list) else right_arm_torque.tolist(),                         
+                                "qvel":   right_arm_vel if isinstance(right_arm_vel, list) else right_arm_vel.tolist(), # is this data usefull?
+                                "torque": [],                         
                             },                        
                             "left_hand": {                                                                    
                                 "qpos":   left_hand_state,           
-                                "qvel":   left_hand_vel,                           
-                                "torque": left_hand_torque,                          
+                                "qvel":   [],                          
+                                "torque": [],                          
                                 "pressures": left_hand_pressures,     # Add pressure data
                             }, 
                             "right_hand": {                                                                    
                                 "qpos":   right_hand_state,       
-                                "qvel":   right_hand_vel,                           
-                                "torque": right_hand_torque,  
+                                "qvel":   [],                          
+                                "torque": [], 
                                 "pressures": right_hand_pressures,   # Add pressure data
                             }, 
-                            "body": None, 
+                            "body": None, # TODO Hier könnte man um den Körper Erweitern
                         }
-                        actions = {
+                        actions = { # Todo torque und pressure auch als action? Laut Paper bi-ACT schon.
                             "left_arm": {                                   
                                 "qpos":   left_arm_action.tolist(),       
                                 "qvel":   [],       
