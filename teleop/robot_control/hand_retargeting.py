@@ -10,19 +10,40 @@ class HandType(Enum):
     INSPIRE_HAND_Unit_Test = os.path.join(base_dir, "assets/inspire_hand/inspire_hand.yml")
     UNITREE_DEX3 = os.path.join(base_dir, "assets/unitree_hand/unitree_dex3.yml")
     UNITREE_DEX3_Unit_Test = os.path.join(base_dir, "assets/unitree_hand/unitree_dex3.yml")
+    UNITREE_DEX3_DEXPILOT = os.path.join(base_dir, "assets/unitree_hand/unitree_dex3_dexpilot.yml")
+    UNITREE_DEX3_DEXPILOT_Unit_Test = os.path.join(base_dir, "assets/unitree_hand/unitree_dex3_dexpilot.yml")
 
 class HandRetargeting:
     def __init__(self, hand_type: HandType, retargeting_method: str = 'vector'):
+        # Dynamically select the configuration based on retargeting method
         if hand_type == HandType.UNITREE_DEX3:
-            RetargetingConfig.set_default_urdf_dir('assets')
+            if retargeting_method == 'dexpilot':
+                config_hand_type = HandType.UNITREE_DEX3_DEXPILOT
+            else:
+                config_hand_type = HandType.UNITREE_DEX3
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            RetargetingConfig.set_default_urdf_dir(os.path.join(base_dir, 'assets'))
         elif hand_type == HandType.UNITREE_DEX3_Unit_Test:
-            RetargetingConfig.set_default_urdf_dir('assets')
+            if retargeting_method == 'dexpilot':
+                config_hand_type = HandType.UNITREE_DEX3_DEXPILOT_Unit_Test
+            else:
+                config_hand_type = HandType.UNITREE_DEX3_Unit_Test
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            RetargetingConfig.set_default_urdf_dir(os.path.join(base_dir, 'assets'))
         elif hand_type == HandType.INSPIRE_HAND:
-            RetargetingConfig.set_default_urdf_dir('assets')
+            config_hand_type = HandType.INSPIRE_HAND
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            RetargetingConfig.set_default_urdf_dir(os.path.join(base_dir, 'assets'))
         elif hand_type == HandType.INSPIRE_HAND_Unit_Test:
-            RetargetingConfig.set_default_urdf_dir('assets')
+            config_hand_type = HandType.INSPIRE_HAND_Unit_Test
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            RetargetingConfig.set_default_urdf_dir(os.path.join(base_dir, 'assets'))
+        else:
+            config_hand_type = hand_type
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            RetargetingConfig.set_default_urdf_dir(os.path.join(base_dir, 'assets'))
 
-        config_file_path = Path(hand_type.value)
+        config_file_path = Path(config_hand_type.value)
 
         try:
             with config_file_path.open('r') as f:
@@ -31,19 +52,6 @@ class HandRetargeting:
             if 'left' not in self.cfg or 'right' not in self.cfg:
                 raise ValueError("Configuration file must contain 'left' and 'right' keys.")
 
-            # Override the retargeting method from command line
-            self.cfg['left']['type'] = retargeting_method
-            self.cfg['right']['type'] = retargeting_method
-            
-            # Add required parameters for dexpilot if selected
-            if retargeting_method == 'dexpilot':
-                if hand_type in [HandType.UNITREE_DEX3, HandType.UNITREE_DEX3_Unit_Test]:
-                    # Set dexpilot-specific parameters for Unitree Dex3
-                    for hand_side in ['left', 'right']:
-                        self.cfg[hand_side]['wrist_link_name'] = 'base_link'
-                        self.cfg[hand_side]['finger_tip_link_names'] = ['thumb_tip', 'index_tip', 'middle_tip']
-                        self.cfg[hand_side]['project_dist'] = 0.03
-                        self.cfg[hand_side]['escape_dist'] = 0.05
 
             left_retargeting_config = RetargetingConfig.from_dict(self.cfg['left'])
             right_retargeting_config = RetargetingConfig.from_dict(self.cfg['right'])
