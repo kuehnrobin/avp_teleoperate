@@ -2,23 +2,25 @@ from .dex_retargeting.retargeting_config import RetargetingConfig
 from pathlib import Path
 import yaml
 from enum import Enum
+import os
 
 class HandType(Enum):
-    INSPIRE_HAND = "assets/inspire_hand/inspire_hand.yml"
-    INSPIRE_HAND_Unit_Test = "../assets/inspire_hand/inspire_hand.yml"
-    UNITREE_DEX3 = "assets/unitree_hand/unitree_dex3.yml"
-    UNITREE_DEX3_Unit_Test = "../../assets/unitree_hand/unitree_dex3.yml"
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    INSPIRE_HAND = os.path.join(base_dir, "assets/inspire_hand/inspire_hand.yml")
+    INSPIRE_HAND_Unit_Test = os.path.join(base_dir, "assets/inspire_hand/inspire_hand.yml")
+    UNITREE_DEX3 = os.path.join(base_dir, "assets/unitree_hand/unitree_dex3.yml")
+    UNITREE_DEX3_Unit_Test = os.path.join(base_dir, "assets/unitree_hand/unitree_dex3.yml")
 
 class HandRetargeting:
     def __init__(self, hand_type: HandType, retargeting_method: str = 'vector'):
         if hand_type == HandType.UNITREE_DEX3:
             RetargetingConfig.set_default_urdf_dir('assets')
         elif hand_type == HandType.UNITREE_DEX3_Unit_Test:
-            RetargetingConfig.set_default_urdf_dir('../../assets')
+            RetargetingConfig.set_default_urdf_dir('assets')
         elif hand_type == HandType.INSPIRE_HAND:
-            RetargetingConfig.set_default_urdf_dir('../assets')
+            RetargetingConfig.set_default_urdf_dir('assets')
         elif hand_type == HandType.INSPIRE_HAND_Unit_Test:
-            RetargetingConfig.set_default_urdf_dir('../../assets')
+            RetargetingConfig.set_default_urdf_dir('assets')
 
         config_file_path = Path(hand_type.value)
 

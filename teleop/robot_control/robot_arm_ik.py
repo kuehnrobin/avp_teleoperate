@@ -21,10 +21,16 @@ class G1_29_ArmIK:
         self.Unit_Test = Unit_Test
         self.Visualization = Visualization
 
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        urdf_path = os.path.join(base_dir, 'assets/g1/g1_body29_hand14.urdf')
+        mesh_dir = os.path.join(base_dir, 'assets/g1/')
+
         if not self.Unit_Test:
-            self.robot = pin.RobotWrapper.BuildFromURDF('assets/g1/g1_body29_hand14.urdf', 'assets/g1/')
+            self.robot = pin.RobotWrapper.BuildFromURDF(urdf_path, mesh_dir)
         else:
-            self.robot = pin.RobotWrapper.BuildFromURDF('../../assets/g1/g1_body29_hand14.urdf', '../../assets/g1/') # for test
+            test_urdf_path = os.path.join(base_dir, 'assets/g1/g1_body29_hand14.urdf')
+            test_mesh_dir = os.path.join(base_dir, 'assets/g1/')
+            self.robot = pin.RobotWrapper.BuildFromURDF(test_urdf_path, test_mesh_dir)
 
         self.mixed_jointsToLockIDs = [
                                         "left_hip_pitch_joint" ,
@@ -654,7 +660,7 @@ class H1_2_ArmIK:
                           [0, 0, 1], [0, 0.6, 1]]).astype(np.float32).T
             )
             axis_length = 0.1
-            axis_width = 10
+            axis_width = 20
             for frame_viz_name in frame_viz_names:
                 self.vis.viewer[frame_viz_name].set_object(
                     mg.LineSegments(
@@ -682,7 +688,7 @@ class H1_2_ArmIK:
             self.init_data = current_lr_arm_motor_q
         self.opti.set_initial(self.var_q, self.init_data)
 
-        left_wrist, right_wrist = self.scale_arms(left_wrist, right_wrist)
+        # left_wrist, right_wrist = self.scale_arms(left_wrist, right_wrist)
         if self.Visualization:
             self.vis.viewer['L_ee_target'].set_transform(left_wrist)   # for visualization
             self.vis.viewer['R_ee_target'].set_transform(right_wrist)  # for visualization
@@ -735,6 +741,7 @@ class H1_2_ArmIK:
 
             # return sol_q, sol_tauff
             return current_lr_arm_motor_q, np.zeros(self.reduced_robot.model.nv)
+
 
 class H1_ArmIK:
     def __init__(self, Unit_Test = False, Visualization = False):
@@ -903,12 +910,12 @@ class H1_ArmIK:
                           [0, 0, 0], [0, 0, 1]]).astype(np.float32).T
             )
             FRAME_AXIS_COLORS = (
-                np.array([[1.0, 0.3, 0.3], [1.0, 0.7, 0.7],
-                          [0.3, 1.0, 0.5], [0.7, 1.0, 0.8],
-                          [0.3, 0.8, 1.0], [0.7, 0.9, 1.0]]).astype(np.float32).T
+                np.array([[1, 0, 0], [1, 0.6, 0],
+                          [0, 1, 0], [0.6, 1, 0],
+                          [0, 0, 1], [0, 0.6, 1]]).astype(np.float32).T
             )
             axis_length = 0.1
-            axis_width = 10
+            axis_width = 20
             for frame_viz_name in frame_viz_names:
                 self.vis.viewer[frame_viz_name].set_object(
                     mg.LineSegments(
