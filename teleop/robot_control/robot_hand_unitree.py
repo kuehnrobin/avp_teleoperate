@@ -228,17 +228,41 @@ class Dex3_1_Controller:
                 state_data = np.concatenate((np.array(left_hand_state_array[:]), np.array(right_hand_state_array[:])))
 
                 if not np.all(right_hand_mat == 0.0) and not np.all(left_hand_mat[4] == np.array([-1.13, 0.3, 0.15])): # if hand data has been initialized.
-                    ref_left_value = left_hand_mat[unitree_tip_indices]
-                    ref_right_value = right_hand_mat[unitree_tip_indices]
-                    ref_left_value[0] = ref_left_value[0] * 1.15
-                    ref_left_value[1] = ref_left_value[1] * 1.05
-                    ref_left_value[2] = ref_left_value[2] * 0.95
-                    ref_right_value[0] = ref_right_value[0] * 1.15
-                    ref_right_value[1] = ref_right_value[1] * 1.05
-                    ref_right_value[2] = ref_right_value[2] * 0.95
-
-                    left_q_target  = self.hand_retargeting.left_retargeting.retarget(ref_left_value)[self.hand_retargeting.right_dex_retargeting_to_hardware]
-                    right_q_target = self.hand_retargeting.right_retargeting.retarget(ref_right_value)[self.hand_retargeting.right_dex_retargeting_to_hardware]
+                    # Get retargeting types
+                    left_retargeting_type = self.hand_retargeting.left_retargeting.optimizer.retargeting_type
+                    right_retargeting_type = self.hand_retargeting.right_retargeting.optimizer.retargeting_type
+                    
+                    # Process left hand
+                    left_indices = self.hand_retargeting.left_retargeting.optimizer.target_link_human_indices
+                    if left_retargeting_type == "POSITION":
+                        # Vector method: use absolute fingertip positions
+                        ref_left_value = left_hand_mat[unitree_tip_indices]
+                        ref_left_value[0] = ref_left_value[0] * 1.15
+                        ref_left_value[1] = ref_left_value[1] * 1.05
+                        ref_left_value[2] = ref_left_value[2] * 0.95
+                        left_q_target = self.hand_retargeting.left_retargeting.retarget(ref_left_value)[self.hand_retargeting.left_dex_retargeting_to_hardware]
+                    else:
+                        # DexPilot method: use relative positions (fingertips relative to wrist)
+                        origin_indices = left_indices[0, :]
+                        task_indices = left_indices[1, :]
+                        ref_left_value = left_hand_mat[task_indices, :] - left_hand_mat[origin_indices, :]
+                        left_q_target = self.hand_retargeting.left_retargeting.retarget(ref_left_value)
+                    
+                    # Process right hand
+                    right_indices = self.hand_retargeting.right_retargeting.optimizer.target_link_human_indices
+                    if right_retargeting_type == "POSITION":
+                        # Vector method: use absolute fingertip positions
+                        ref_right_value = right_hand_mat[unitree_tip_indices]
+                        ref_right_value[0] = ref_right_value[0] * 1.15
+                        ref_right_value[1] = ref_right_value[1] * 1.05
+                        ref_right_value[2] = ref_right_value[2] * 0.95
+                        right_q_target = self.hand_retargeting.right_retargeting.retarget(ref_right_value)[self.hand_retargeting.right_dex_retargeting_to_hardware]
+                    else:
+                        # DexPilot method: use relative positions (fingertips relative to wrist)
+                        origin_indices = right_indices[0, :]
+                        task_indices = right_indices[1, :]
+                        ref_right_value = right_hand_mat[task_indices, :] - right_hand_mat[origin_indices, :]
+                        right_q_target = self.hand_retargeting.right_retargeting.retarget(ref_right_value)
 
                 # get dual hand action
                 action_data = np.concatenate((left_q_target, right_q_target))    

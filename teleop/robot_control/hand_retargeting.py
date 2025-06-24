@@ -46,15 +46,32 @@ class HandRetargeting:
         config_file_path = Path(config_hand_type.value)
 
         try:
-            with config_file_path.open('r') as f:
-                self.cfg = yaml.safe_load(f)
+            # Handle different configuration formats for different retargeting methods
+            if retargeting_method == 'dexpilot':
+                # DexPilot uses separate config files for left and right hands
+                base_path = config_file_path.parent / config_file_path.stem
+                left_config_path = base_path.with_name(f"{base_path.name}_left_dexpilot.yml")
+                right_config_path = base_path.with_name(f"{base_path.name}_right_dexpilot.yml")
                 
-            if 'left' not in self.cfg or 'right' not in self.cfg:
-                raise ValueError("Configuration file must contain 'left' and 'right' keys.")
+                with left_config_path.open('r') as f:
+                    left_cfg = yaml.safe_load(f)
+                with right_config_path.open('r') as f:
+                    right_cfg = yaml.safe_load(f)
+                    
+                self.cfg = {'left': left_cfg, 'right': right_cfg}
+                left_retargeting_config = RetargetingConfig.from_dict(left_cfg['retargeting'])
+                right_retargeting_config = RetargetingConfig.from_dict(right_cfg['retargeting'])
+            else:
+                # Vector retargeting uses a single config file with left/right sections
+                with config_file_path.open('r') as f:
+                    self.cfg = yaml.safe_load(f)
+                    
+                if 'left' not in self.cfg or 'right' not in self.cfg:
+                    raise ValueError("Configuration file must contain 'left' and 'right' keys.")
 
-
-            left_retargeting_config = RetargetingConfig.from_dict(self.cfg['left']['retargeting'])
-            right_retargeting_config = RetargetingConfig.from_dict(self.cfg['right']['retargeting'])
+                left_retargeting_config = RetargetingConfig.from_dict(self.cfg['left']['retargeting'])
+                right_retargeting_config = RetargetingConfig.from_dict(self.cfg['right']['retargeting'])
+            
             self.left_retargeting = left_retargeting_config.build()
             self.right_retargeting = right_retargeting_config.build()
 
