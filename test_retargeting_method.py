@@ -23,8 +23,10 @@ def test_retargeting_methods():
         print("\n1. Testing vector method:")
         hand_retargeting_vector = HandRetargeting(HandType.UNITREE_DEX3, 'vector')
         print(f"   ✓ Vector method initialized successfully")
-        print(f"   Left retargeting type: {hand_retargeting_vector.cfg['left']['type']}")
-        print(f"   Right retargeting type: {hand_retargeting_vector.cfg['right']['type']}")
+        print(f"   Left retargeting type: {hand_retargeting_vector.cfg['left']['retargeting']['type']}")
+        print(f"   Right retargeting type: {hand_retargeting_vector.cfg['right']['retargeting']['type']}")
+        print(f"   Left optimizer type: {hand_retargeting_vector.left_retargeting.optimizer.retargeting_type}")
+        print(f"   Right optimizer type: {hand_retargeting_vector.right_retargeting.optimizer.retargeting_type}")
     except Exception as e:
         print(f"   ✗ Vector method failed: {e}")
         return False
