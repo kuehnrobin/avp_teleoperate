@@ -70,7 +70,7 @@ class G1_29_ArmController:
         self.kd_wrist = 3.0# 2.0   # Increase from 1.5 to 2.0 to 2.5
 
         self.all_motor_q = None
-        self.arm_velocity_limit = 20.0
+        self.arm_velocity_limit = 10.0
         self.control_dt = 1.0 / 250.0
 
         self._speed_gradual_max = False

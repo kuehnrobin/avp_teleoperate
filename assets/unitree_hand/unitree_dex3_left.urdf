@@ -60,13 +60,12 @@
         <mesh filename="meshes/left_hand_thumb_0_link.STL"/>
       </geometry>
     </collision>
-  </link>
-  <joint name="left_hand_thumb_1_joint" type="revolute">
+  </link>  <joint name="left_hand_thumb_1_joint" type="revolute">
     <origin xyz="-0.0025 -0.0193 0" rpy="0 0 0"/>
     <axis xyz="0 0 1"/>
     <parent link="left_hand_thumb_0_link"/>
     <child link="left_hand_thumb_1_link"/>
-    <limit effort="1.4" velocity="12" lower="-0.72431163" upper="0.920"/>
+    <limit effort="1.4" velocity="12" lower="-0.72431163" upper="1.22"/>
   </joint>
   <link name="left_hand_thumb_1_link">
     <inertial>
