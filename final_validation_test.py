@@ -14,7 +14,7 @@ parent2_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__
 sys.path.append(parent2_dir)
 
 from teleop.robot_control.hand_retargeting import HandRetargeting, HandType
-from thumb_pinch_corrector import ThumbPinchCorrector
+from teleop.robot_control.thumb_pinch_corrector import ThumbPinchCorrector
 
 
 def validate_complete_system():

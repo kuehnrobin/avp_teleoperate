@@ -11,7 +11,7 @@ import os
 parent2_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(parent2_dir)
 
-from thumb_pinch_corrector import ThumbPinchCorrector
+from teleop.robot_control.thumb_pinch_corrector import ThumbPinchCorrector
 
 
 def debug_thumb_correction():

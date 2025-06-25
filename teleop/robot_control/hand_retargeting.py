@@ -61,8 +61,9 @@ class HandRetargeting:
                 if 'left' not in self.cfg or 'right' not in self.cfg:
                     raise ValueError("Configuration file must contain 'left' and 'right' keys.")
 
-                left_retargeting_config = RetargetingConfig.from_dict(self.cfg['left']['retargeting'])
-                right_retargeting_config = RetargetingConfig.from_dict(self.cfg['right']['retargeting'])
+                # For vector retargeting, the structure is now flat (no nested 'retargeting' key)
+                left_retargeting_config = RetargetingConfig.from_dict(self.cfg['left'])
+                right_retargeting_config = RetargetingConfig.from_dict(self.cfg['right'])
             
             self.left_retargeting = left_retargeting_config.build()
             self.right_retargeting = right_retargeting_config.build()
