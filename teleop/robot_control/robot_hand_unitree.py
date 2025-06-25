@@ -247,30 +247,20 @@ class Dex3_1_Controller:
                         origin_indices = left_indices[0, :]  # All 6 origin indices
                         task_indices = left_indices[1, :]    # All 6 task indices
                         
-                        # Create extended joint_pos array with 25 joints (OpenXR hand tracking format)
-                        # We need to map DexPilot indices (0, 4, 8, 12) to our hand structure
+                        # DexPilot uses a 4-joint spacing convention: 0=wrist, 4=thumb, 8=index, 12=middle
+                        # But OpenXR provides: 0=wrist, 4=thumb, 9=index, 14=middle
+                        # We need to create a DexPilot-compatible joint_pos array
                         joint_pos = np.zeros((25, 3))
-                        joint_pos[:] = left_hand_mat[:]
                         
-                        # Map DexPilot expected indices to our OpenXR hand tracking indices
-                        # DexPilot expects: 0=wrist, 4=thumb_tip, 8=index_tip, 12=middle_tip
-                        # OpenXR provides: 0=wrist, 4=thumb_tip, 9=index_tip, 14=middle_tip
-                        index_mapping = {
-                            0: 0,   # wrist -> wrist
-                            4: 4,   # thumb_tip -> thumb_tip  
-                            8: 9,   # index_tip -> index_tip (OpenXR uses 9)
-                            12: 14  # middle_tip -> middle_tip (OpenXR uses 14)
-                        }
-                        
-                        # Remap the joint positions to match DexPilot expectations
-                        remapped_joint_pos = np.zeros((25, 3))
-                        remapped_joint_pos[:] = joint_pos[:]
-                        for dexpilot_idx, openxr_idx in index_mapping.items():
-                            if dexpilot_idx < 25 and openxr_idx < 25:
-                                remapped_joint_pos[dexpilot_idx] = joint_pos[openxr_idx]
+                        # Map OpenXR indices to DexPilot expected positions
+                        # DexPilot expects joints at indices [0, 4, 8, 12] but OpenXR has [0, 4, 9, 14]
+                        joint_pos[0] = left_hand_mat[0]   # wrist
+                        joint_pos[4] = left_hand_mat[4]   # thumb_tip
+                        joint_pos[8] = left_hand_mat[9]   # index_tip (move from 9 to 8)
+                        joint_pos[12] = left_hand_mat[14] # middle_tip (move from 14 to 12)
                         
                         # Calculate vectors exactly like show_realtime_retargeting.py
-                        ref_left_value = remapped_joint_pos[task_indices, :] - remapped_joint_pos[origin_indices, :]
+                        ref_left_value = joint_pos[task_indices, :] - joint_pos[origin_indices, :]
                         left_q_target = self.hand_retargeting.left_retargeting.retarget(ref_left_value)
                     
                     # Process right hand
@@ -288,30 +278,20 @@ class Dex3_1_Controller:
                         origin_indices = right_indices[0, :]  # All 6 origin indices
                         task_indices = right_indices[1, :]    # All 6 task indices
                         
-                        # Create extended joint_pos array with 25 joints (OpenXR hand tracking format)
-                        # We need to map DexPilot indices (0, 4, 8, 12) to our hand structure
+                        # DexPilot uses a 4-joint spacing convention: 0=wrist, 4=thumb, 8=index, 12=middle
+                        # But OpenXR provides: 0=wrist, 4=thumb, 9=index, 14=middle
+                        # We need to create a DexPilot-compatible joint_pos array
                         joint_pos = np.zeros((25, 3))
-                        joint_pos[:] = right_hand_mat[:]
                         
-                        # Map DexPilot expected indices to our OpenXR hand tracking indices
-                        # DexPilot expects: 0=wrist, 4=thumb_tip, 8=index_tip, 12=middle_tip
-                        # OpenXR provides: 0=wrist, 4=thumb_tip, 9=index_tip, 14=middle_tip
-                        index_mapping = {
-                            0: 0,   # wrist -> wrist
-                            4: 4,   # thumb_tip -> thumb_tip  
-                            8: 9,   # index_tip -> index_tip (OpenXR uses 9)
-                            12: 14  # middle_tip -> middle_tip (OpenXR uses 14)
-                        }
-                        
-                        # Remap the joint positions to match DexPilot expectations
-                        remapped_joint_pos = np.zeros((25, 3))
-                        remapped_joint_pos[:] = joint_pos[:]
-                        for dexpilot_idx, openxr_idx in index_mapping.items():
-                            if dexpilot_idx < 25 and openxr_idx < 25:
-                                remapped_joint_pos[dexpilot_idx] = joint_pos[openxr_idx]
+                        # Map OpenXR indices to DexPilot expected positions
+                        # DexPilot expects joints at indices [0, 4, 8, 12] but OpenXR has [0, 4, 9, 14]
+                        joint_pos[0] = right_hand_mat[0]   # wrist
+                        joint_pos[4] = right_hand_mat[4]   # thumb_tip
+                        joint_pos[8] = right_hand_mat[9]   # index_tip (move from 9 to 8)
+                        joint_pos[12] = right_hand_mat[14] # middle_tip (move from 14 to 12)
                         
                         # Calculate vectors exactly like show_realtime_retargeting.py
-                        ref_right_value = remapped_joint_pos[task_indices, :] - remapped_joint_pos[origin_indices, :]
+                        ref_right_value = joint_pos[task_indices, :] - joint_pos[origin_indices, :]
                         right_q_target = self.hand_retargeting.right_retargeting.retarget(ref_right_value)
 
                 # get dual hand action
