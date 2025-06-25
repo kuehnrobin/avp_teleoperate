@@ -3,6 +3,16 @@ retargeting:
   urdf_path: unitree_hand/unitree_dex3_right.urdf
   
   # Target refers to the retargeting target, which is the robot hand
+  # Only optimize joints with good range, skip problematic tip joints
+  target_joint_names: [
+    "right_hand_thumb_0_joint",    # thumb base rotation (-60° to +60°) - good range
+    "right_hand_thumb_1_joint",    # thumb bend (-41° to +53°) - good range  
+    "right_hand_middle_0_joint",   # middle base (-90° to 0°) - good range
+    "right_hand_middle_1_joint",   # middle tip (-100° to 0°) - good range
+    "right_hand_index_0_joint"     # index base (-90° to 0°) - good range
+    # Skip right_hand_thumb_2_joint (0° to 100°) - limited range, causing issues
+    # Skip right_hand_index_1_joint (-100° to 0°) - limited range, causing issues
+  ]
   wrist_link_name: "base_link"
   finger_tip_link_names: ["thumb_tip", "index_tip", "middle_tip"]
   scaling_factor: 1.0
