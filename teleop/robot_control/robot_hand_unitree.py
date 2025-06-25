@@ -270,24 +270,27 @@ class Dex3_1_Controller:
                         ref_left_value = joint_pos[task_indices, :] - joint_pos[origin_indices, :]
                         
                         # For target_joint_names config, we need to provide fixed_qpos for the non-optimized joints
-                        # The skipped joints are: thumb_2 (index 2) and index_1 (index 6) in hardware order
-                        # But in DexPilot's joint order, we need to identify which indices they correspond to
-                        fixed_qpos = np.array([0.5, -0.5])  # Default values for the 2 skipped joints
+                        # From debug: URDF fixed joint indices are [1, 6] which correspond to:
+                        # URDF Joint 1: left_hand_index_1_joint (Hardware Index 6)  
+                        # URDF Joint 6: left_hand_thumb_2_joint (Hardware Index 2)
+                        # DexPilot optimizes all 7 joints - no fixed_qpos needed
+                        dexpilot_output = self.hand_retargeting.left_retargeting.retarget(ref_left_value)
                         
-                        dexpilot_output = self.hand_retargeting.left_retargeting.retarget(ref_left_value, fixed_qpos)
+                        # DexPilot returns the full 7-joint array with fixed joints already set
+                        # We just need to map from URDF order to Hardware API order
+                        left_q_target = np.zeros(Dex3_Num_Motors)
                         
-                        # Map DexPilot output (5 joints) to full hardware array (7 joints)
-                        left_q_target = np.zeros(Dex3_Num_Motors)  # Initialize all joints to 0
-                        
-                        # Map the 5 DexPilot outputs to their corresponding hardware indices
-                        for i, hw_idx in enumerate(self.hand_retargeting.left_dex_retargeting_to_hardware):
-                            if i < len(dexpilot_output):
-                                left_q_target[hw_idx] = dexpilot_output[i]
-                        
-                        # Set default values for the joints we skipped (thumb_2 and index_1)
-                        # These were problematic joints, so set them to safe middle values
-                        left_q_target[2] = fixed_qpos[0]  # thumb_2: middle of range [0, 1.745]
-                        left_q_target[6] = fixed_qpos[1]  # index_1: middle of range [-1.745, 0]
+                        # URDF to Hardware mapping:
+                        # URDF[0] left_hand_index_0_joint -> Hardware[5]
+                        # URDF[1] left_hand_index_1_joint -> Hardware[6] (fixed)
+                        # URDF[2] left_hand_middle_0_joint -> Hardware[3]  
+                        # URDF[3] left_hand_middle_1_joint -> Hardware[4]
+                        # URDF[4] left_hand_thumb_0_joint -> Hardware[0]
+                        # URDF[5] left_hand_thumb_1_joint -> Hardware[1]
+                        # URDF[6] left_hand_thumb_2_joint -> Hardware[2] (fixed)
+                        urdf_to_hardware = [5, 6, 3, 4, 0, 1, 2]
+                        for urdf_idx, hw_idx in enumerate(urdf_to_hardware):
+                            left_q_target[hw_idx] = dexpilot_output[urdf_idx]
                     
                     # Process right hand
                     right_indices = self.hand_retargeting.right_retargeting.optimizer.target_link_human_indices
@@ -327,24 +330,27 @@ class Dex3_1_Controller:
                         ref_right_value = joint_pos[task_indices, :] - joint_pos[origin_indices, :]
                         
                         # For target_joint_names config, we need to provide fixed_qpos for the non-optimized joints
-                        # The skipped joints are: thumb_2 (index 2) and index_1 (index 6) in hardware order
-                        # But in DexPilot's joint order, we need to identify which indices they correspond to
-                        fixed_qpos = np.array([0.5, -0.5])  # Default values for the 2 skipped joints
+                        # From debug: URDF fixed joint indices are [1, 6] which correspond to:
+                        # URDF Joint 1: right_hand_index_1_joint (Hardware Index 6)  
+                        # URDF Joint 6: right_hand_thumb_2_joint (Hardware Index 2)
+                        # DexPilot optimizes all 7 joints - no fixed_qpos needed  
+                        dexpilot_output = self.hand_retargeting.right_retargeting.retarget(ref_right_value)
                         
-                        dexpilot_output = self.hand_retargeting.right_retargeting.retarget(ref_right_value, fixed_qpos)
+                        # DexPilot returns the full 7-joint array with fixed joints already set
+                        # We just need to map from URDF order to Hardware API order
+                        right_q_target = np.zeros(Dex3_Num_Motors)
                         
-                        # Map DexPilot output (5 joints) to full hardware array (7 joints)
-                        right_q_target = np.zeros(Dex3_Num_Motors)  # Initialize all joints to 0
-                        
-                        # Map the 5 DexPilot outputs to their corresponding hardware indices
-                        for i, hw_idx in enumerate(self.hand_retargeting.right_dex_retargeting_to_hardware):
-                            if i < len(dexpilot_output):
-                                right_q_target[hw_idx] = dexpilot_output[i]
-                        
-                        # Set default values for the joints we skipped (thumb_2 and index_1)
-                        # These were problematic joints, so set them to safe middle values
-                        right_q_target[2] = fixed_qpos[0]  # thumb_2: middle of range [0, 1.745]
-                        right_q_target[6] = fixed_qpos[1]  # index_1: middle of range [-1.745, 0]
+                        # URDF to Hardware mapping:
+                        # URDF[0] right_hand_index_0_joint -> Hardware[5]
+                        # URDF[1] right_hand_index_1_joint -> Hardware[6] (fixed)
+                        # URDF[2] right_hand_middle_0_joint -> Hardware[3]  
+                        # URDF[3] right_hand_middle_1_joint -> Hardware[4]
+                        # URDF[4] right_hand_thumb_0_joint -> Hardware[0]
+                        # URDF[5] right_hand_thumb_1_joint -> Hardware[1]
+                        # URDF[6] right_hand_thumb_2_joint -> Hardware[2] (fixed)
+                        urdf_to_hardware = [5, 6, 3, 4, 0, 1, 2]
+                        for urdf_idx, hw_idx in enumerate(urdf_to_hardware):
+                            right_q_target[hw_idx] = dexpilot_output[urdf_idx]
 
                 # get dual hand action
                 action_data = np.concatenate((left_q_target, right_q_target))    

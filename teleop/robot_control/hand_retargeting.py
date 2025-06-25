@@ -67,12 +67,12 @@ class HandRetargeting:
             self.left_retargeting = left_retargeting_config.build()
             self.right_retargeting = right_retargeting_config.build()
 
-            # For DexPilot, joint_names may not be available in the same way
+            # For both DexPilot and vector retargeting, joint_names should be available
             try:
                 self.left_retargeting_joint_names = self.left_retargeting.joint_names
                 self.right_retargeting_joint_names = self.right_retargeting.joint_names
             except AttributeError:
-                # DexPilot doesn't have joint_names, it works with fingertip positions
+                # Fallback for older configurations
                 if retargeting_method == 'dexpilot':
                     # For DexPilot, we work with fingertip positions, not joint names
                     self.left_retargeting_joint_names = ['thumb_tip', 'index_tip', 'middle_tip']
@@ -89,29 +89,10 @@ class HandRetargeting:
                                                     'right_hand_middle_0_joint', 'right_hand_middle_1_joint',
                                                     'right_hand_index_0_joint', 'right_hand_index_1_joint' ]
                 
-                # For DexPilot, we need different handling since it uses fingertip positions, not joint angles
-                if retargeting_method == 'dexpilot':
-                    # DexPilot works with fingertip positions, so we need to map from retargeting output to hardware joints
-                    # With target_joint_names, DexPilot now outputs 5 joints instead of 7
-                    # We need to map these 5 optimized joints to the correct hardware positions
-                    
-                    # DexPilot target joints (5): [thumb_0, thumb_1, middle_0, middle_1, index_0]
-                    # Hardware API joints (7): [thumb_0, thumb_1, thumb_2, middle_0, middle_1, index_0, index_1]
-                    
-                    # Create mapping from DexPilot output to hardware indices
-                    # DexPilot output[0] -> Hardware[0] (thumb_0)
-                    # DexPilot output[1] -> Hardware[1] (thumb_1) 
-                    # DexPilot output[2] -> Hardware[3] (middle_0)
-                    # DexPilot output[3] -> Hardware[4] (middle_1)
-                    # DexPilot output[4] -> Hardware[5] (index_0)
-                    # Hardware[2] (thumb_2) and Hardware[6] (index_1) will use default/fixed values
-                    
-                    self.left_dex_retargeting_to_hardware = [0, 1, 3, 4, 5]  # Map 5 DexPilot outputs to hardware indices
-                    self.right_dex_retargeting_to_hardware = [0, 1, 3, 4, 5]  # Map 5 DexPilot outputs to hardware indices
-                else:
-                    # For vector retargeting, map joint names directly
-                    self.left_dex_retargeting_to_hardware = [ self.left_retargeting_joint_names.index(name) for name in self.left_dex3_api_joint_names]
-                    self.right_dex_retargeting_to_hardware = [ self.right_retargeting_joint_names.index(name) for name in self.right_dex3_api_joint_names]
+                # For both DexPilot and vector retargeting, map joint names directly
+                # Note: DexPilot now includes all 7 joints in target_joint_names, so it returns a full 7-element array
+                self.left_dex_retargeting_to_hardware = [ self.left_retargeting_joint_names.index(name) for name in self.left_dex3_api_joint_names]
+                self.right_dex_retargeting_to_hardware = [ self.right_retargeting_joint_names.index(name) for name in self.right_dex3_api_joint_names]
 
                 # Archive: This is the joint order of the dex-retargeting library version 0.1.1.
                 # print([joint.get_name() for joint in self.left_retargeting.optimizer.robot.get_active_joints()])

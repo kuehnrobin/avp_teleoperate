@@ -6,10 +6,13 @@ retargeting:
   # Only optimize joints with good range, skip problematic tip joints
   target_joint_names: [
     "right_hand_thumb_0_joint",    # thumb base rotation (-60° to +60°) - good range
-    "right_hand_thumb_1_joint",    # thumb bend (-41° to +53°) - good range  
+    "right_hand_thumb_1_joint",    # thumb bend (-41° to +53°) - good range 
+    "right_hand_thumb_2_joint", # (0° to 100°) - limited range, causing issues
     "right_hand_middle_0_joint",   # middle base (-90° to 0°) - good range
     "right_hand_middle_1_joint",   # middle tip (-100° to 0°) - good range
-    "right_hand_index_0_joint"     # index base (-90° to 0°) - good range
+    "right_hand_index_0_joint",     # index base (-90° to 0°) - good range
+    "right_hand_index_1_joint", # (-100° to 0°) - limited range, causing issues
+
     # Skip right_hand_thumb_2_joint (0° to 100°) - limited range, causing issues
     # Skip right_hand_index_1_joint (-100° to 0°) - limited range, causing issues
   ]
