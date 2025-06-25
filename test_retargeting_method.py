@@ -86,6 +86,46 @@ def test_command_line_integration():
     print("✓ Command-line integration tests passed!")
     return True
 
+def test_dexpilot_config_files():
+    """Test DexPilot configuration file loading."""
+    
+    print("\nTesting DexPilot configuration files...")
+    
+    try:
+        import sys
+        import os
+        sys.path.append('/home/robin/humanoid/humanoid_ws/src/avp_teleoperate/dex-retargeting/src')
+        from dex_retargeting.retargeting_config import RetargetingConfig
+        
+        # Test loading the configuration files
+        left_config_path = '/home/robin/humanoid/humanoid_ws/src/avp_teleoperate/assets/unitree_hand/unitree_dex3_left_dexpilot.yml'
+        right_config_path = '/home/robin/humanoid/humanoid_ws/src/avp_teleoperate/assets/unitree_hand/unitree_dex3_right_dexpilot.yml'
+        
+        if os.path.exists(left_config_path):
+            print(f"   ✓ Left config file exists: {left_config_path}")
+            config = RetargetingConfig.load_from_file(left_config_path)
+            print(f"   ✓ Left config loaded successfully")
+            print(f"   Retargeting type: {config.retargeting.type}")
+        else:
+            print(f"   ✗ Left config file not found: {left_config_path}")
+            return False
+            
+        if os.path.exists(right_config_path):
+            print(f"   ✓ Right config file exists: {right_config_path}")
+            config = RetargetingConfig.load_from_file(right_config_path)
+            print(f"   ✓ Right config loaded successfully")
+            print(f"   Retargeting type: {config.retargeting.type}")
+        else:
+            print(f"   ✗ Right config file not found: {right_config_path}")
+            return False
+        
+        print("✓ DexPilot configuration files test passed!")
+        return True
+        
+    except Exception as e:
+        print(f"   ✗ DexPilot configuration test failed: {e}")
+        return False
+
 if __name__ == "__main__":
     print("=" * 60)
     print("RETARGETING METHOD CONFIGURATION TEST")
@@ -99,6 +139,10 @@ if __name__ == "__main__":
     
     # Test command-line integration
     if not test_command_line_integration():
+        success = False
+    
+    # Test DexPilot configuration files
+    if not test_dexpilot_config_files():
         success = False
     
     print("\n" + "=" * 60)

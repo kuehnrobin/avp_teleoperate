@@ -243,9 +243,14 @@ class Dex3_1_Controller:
                         left_q_target = self.hand_retargeting.left_retargeting.retarget(ref_left_value)[self.hand_retargeting.left_dex_retargeting_to_hardware]
                     else:
                         # DexPilot method: use relative positions (fingertips relative to wrist)
-                        origin_indices = left_indices[0, :]
-                        task_indices = left_indices[1, :]
-                        ref_left_value = left_hand_mat[task_indices, :] - left_hand_mat[origin_indices, :]
+                        # DexPilot expects vectors from origin points to task points
+                        # We need to use the finger tip indices for our hand data
+                        origin_indices = left_indices[0, :3]  # Use only first 3 origin indices
+                        task_indices = left_indices[1, :3]    # Use only first 3 task indices
+                        
+                        # Map the indices to our hand data structure (25 joints)
+                        # For DexPilot, we use the fingertip positions: thumb=4, index=9, middle=14
+                        ref_left_value = left_hand_mat[unitree_tip_indices, :] - left_hand_mat[[0, 0, 0], :]  # relative to wrist (joint 0)
                         left_q_target = self.hand_retargeting.left_retargeting.retarget(ref_left_value)
                     
                     # Process right hand
@@ -259,9 +264,14 @@ class Dex3_1_Controller:
                         right_q_target = self.hand_retargeting.right_retargeting.retarget(ref_right_value)[self.hand_retargeting.right_dex_retargeting_to_hardware]
                     else:
                         # DexPilot method: use relative positions (fingertips relative to wrist)
-                        origin_indices = right_indices[0, :]
-                        task_indices = right_indices[1, :]
-                        ref_right_value = right_hand_mat[task_indices, :] - right_hand_mat[origin_indices, :]
+                        # DexPilot expects vectors from origin points to task points
+                        # We need to use the finger tip indices for our hand data
+                        origin_indices = right_indices[0, :3]  # Use only first 3 origin indices
+                        task_indices = right_indices[1, :3]    # Use only first 3 task indices
+                        
+                        # Map the indices to our hand data structure (25 joints)
+                        # For DexPilot, we use the fingertip positions: thumb=4, index=9, middle=14
+                        ref_right_value = right_hand_mat[unitree_tip_indices, :] - right_hand_mat[[0, 0, 0], :]  # relative to wrist (joint 0)
                         right_q_target = self.hand_retargeting.right_retargeting.retarget(ref_right_value)
 
                 # get dual hand action

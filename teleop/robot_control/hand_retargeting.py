@@ -10,48 +10,38 @@ class HandType(Enum):
     INSPIRE_HAND_Unit_Test = os.path.join(base_dir, "assets/inspire_hand/inspire_hand.yml")
     UNITREE_DEX3 = os.path.join(base_dir, "assets/unitree_hand/unitree_dex3.yml")
     UNITREE_DEX3_Unit_Test = os.path.join(base_dir, "assets/unitree_hand/unitree_dex3.yml")
-    UNITREE_DEX3_DEXPILOT = os.path.join(base_dir, "assets/unitree_hand/unitree_dex3_dexpilot.yml")
-    UNITREE_DEX3_DEXPILOT_Unit_Test = os.path.join(base_dir, "assets/unitree_hand/unitree_dex3_dexpilot.yml")
+    # For DexPilot, we use the same base config but load separate left/right configs
+    UNITREE_DEX3_DEXPILOT_LEFT = os.path.join(base_dir, "assets/unitree_hand/unitree_dex3_left_dexpilot.yml")
+    UNITREE_DEX3_DEXPILOT_RIGHT = os.path.join(base_dir, "assets/unitree_hand/unitree_dex3_right_dexpilot.yml")
+    UNITREE_DEX3_DEXPILOT_LEFT_Unit_Test = os.path.join(base_dir, "assets/unitree_hand/unitree_dex3_left_dexpilot.yml")
+    UNITREE_DEX3_DEXPILOT_RIGHT_Unit_Test = os.path.join(base_dir, "assets/unitree_hand/unitree_dex3_right_dexpilot.yml")
 
 class HandRetargeting:
     def __init__(self, hand_type: HandType, retargeting_method: str = 'vector'):
-        # Dynamically select the configuration based on retargeting method
-        if hand_type == HandType.UNITREE_DEX3:
-            if retargeting_method == 'dexpilot':
-                config_hand_type = HandType.UNITREE_DEX3_DEXPILOT
-            else:
-                config_hand_type = HandType.UNITREE_DEX3
-            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            RetargetingConfig.set_default_urdf_dir(os.path.join(base_dir, 'assets'))
-        elif hand_type == HandType.UNITREE_DEX3_Unit_Test:
-            if retargeting_method == 'dexpilot':
-                config_hand_type = HandType.UNITREE_DEX3_DEXPILOT_Unit_Test
-            else:
-                config_hand_type = HandType.UNITREE_DEX3_Unit_Test
-            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            RetargetingConfig.set_default_urdf_dir(os.path.join(base_dir, 'assets'))
-        elif hand_type == HandType.INSPIRE_HAND:
-            config_hand_type = HandType.INSPIRE_HAND
-            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            RetargetingConfig.set_default_urdf_dir(os.path.join(base_dir, 'assets'))
-        elif hand_type == HandType.INSPIRE_HAND_Unit_Test:
-            config_hand_type = HandType.INSPIRE_HAND_Unit_Test
-            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            RetargetingConfig.set_default_urdf_dir(os.path.join(base_dir, 'assets'))
-        else:
-            config_hand_type = hand_type
-            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            RetargetingConfig.set_default_urdf_dir(os.path.join(base_dir, 'assets'))
-
-        config_file_path = Path(config_hand_type.value)
+        # Set up base directory and URDF path
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        RetargetingConfig.set_default_urdf_dir(os.path.join(base_dir, 'assets'))
 
         try:
             # Handle different configuration formats for different retargeting methods
             if retargeting_method == 'dexpilot':
                 # DexPilot uses separate config files for left and right hands
-                base_path = config_file_path.parent / config_file_path.stem
-                left_config_path = base_path.with_name(f"{base_path.name}_left_dexpilot.yml")
-                right_config_path = base_path.with_name(f"{base_path.name}_right_dexpilot.yml")
+                if hand_type == HandType.UNITREE_DEX3:
+                    left_config_path = Path(HandType.UNITREE_DEX3_DEXPILOT_LEFT.value)
+                    right_config_path = Path(HandType.UNITREE_DEX3_DEXPILOT_RIGHT.value)
+                elif hand_type == HandType.UNITREE_DEX3_Unit_Test:
+                    left_config_path = Path(HandType.UNITREE_DEX3_DEXPILOT_LEFT_Unit_Test .value)  # Use same configs for unit test
+                    right_config_path = Path(HandType.UNITREE_DEX3_DEXPILOT_RIGHT_Unit_Test .value)
+                else:
+                    # For other hand types, fall back to the old path generation method
+                    config_file_path = Path(hand_type.value)
+                    base_name = config_file_path.stem
+                    base_dir = config_file_path.parent
+                    left_config_path = base_dir / f"{base_name}_left_dexpilot.yml"
+                    right_config_path = base_dir / f"{base_name}_right_dexpilot.yml"
+                
+                print(f"DexPilot loading left config: {left_config_path}")
+                print(f"DexPilot loading right config: {right_config_path}")
                 
                 with left_config_path.open('r') as f:
                     left_cfg = yaml.safe_load(f)
@@ -63,6 +53,8 @@ class HandRetargeting:
                 right_retargeting_config = RetargetingConfig.from_dict(right_cfg['retargeting'])
             else:
                 # Vector retargeting uses a single config file with left/right sections
+                config_file_path = Path(hand_type.value)
+                print(f"Vector loading config: {config_file_path}")
                 with config_file_path.open('r') as f:
                     self.cfg = yaml.safe_load(f)
                     
