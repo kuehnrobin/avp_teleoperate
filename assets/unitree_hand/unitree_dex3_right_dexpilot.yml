@@ -15,13 +15,13 @@ retargeting:
       "right_hand_middle_1_joint",
     ]
   # The link on the robot hand which corresponding to the wrist of human hand
-  wrist_link_name: None # wrist_link_name: "base_link"
+  wrist_link_name: "base_link"
   # DexPilot retargeting link names
   finger_tip_link_names: ["thumb_tip", "index_tip", "middle_tip"]
 
   # Optimization parameters
-  normal_delta: float = 4e-3
-  huber_delta: float = 2e-2
+  normal_delta: 4e-3
+  huber_delta: 2e-2
 
   # DexPilot parameters
   project_dist: 0.03   # 1.5cm - enter grasp mode very early
