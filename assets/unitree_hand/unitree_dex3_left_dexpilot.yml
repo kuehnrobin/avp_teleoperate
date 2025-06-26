@@ -2,8 +2,8 @@ retargeting:
   type: DexPilot
   urdf_path: unitree_hand/unitree_dex3_left.urdf
   
-  # Target refers to the retargeting target, which is the robot hand
-  # All 7 joints optimized for maximum thumb flexibility
+  # Source refers to the retargeting input, which usually corresponds to the human hand
+  # The joint indices of human hand joint which corresponds to each link in the target_link_names
   target_joint_names: [
     "left_hand_thumb_0_joint",    # thumb base rotation (-60° to +60°) - good range
     "left_hand_thumb_1_joint",    # thumb bend (-41° to +70°) - EXPANDED range
@@ -13,13 +13,18 @@ retargeting:
     "left_hand_index_0_joint",    # index base (-90° to 0°) - good range
     "left_hand_index_1_joint"     # index tip (-100° to 0°) - full range
   ]
+  # The link on the robot hand which corresponding to the wrist of human hand
   wrist_link_name: "base_link"
+  # DexPilot retargeting link names
   finger_tip_link_names: ["thumb_tip", "index_tip", "middle_tip"]
-  scaling_factor: 1.5
   
-  # DexPilot parameters - optimized for pinching
-  project_dist: 0.015   # 1.5cm - enter grasp mode very early # TODO überprüfen
-  escape_dist: 0.08     # 8cm - stable grasp mode with more hysteresis # TODO überprüfen
+  # Optimization parameters
+  normal_delta: float = 4e-3
+  huber_delta: float = 2e-2
+
+  # DexPilot parameters
+  project_dist: 0.03  # 1.5cm - enter grasp mode very early # TODO überprüfen
+  escape_dist: 0.05     # 8cm - stable grasp mode with more hysteresis # TODO überprüfen
   
   # A smaller alpha means stronger filtering, i.e. more smooth but also larger latency
-  low_pass_alpha: 0.2
+  low_pass_alpha: 0.2 #0.1
