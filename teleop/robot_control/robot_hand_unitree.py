@@ -25,7 +25,7 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__f
 sys.path.append(parent_dir)
 from thumb_pinch_corrector import ThumbPinchCorrector
 
-
+# OpenXR hand joint indices for thumb, index, middle fingertips
 unitree_tip_indices = [4, 9, 14] # [thumb, index, middle] in OpenXR
 Dex3_Num_Motors = 7
 Dex3_Num_Pressure_Sensors = 12  # Updated to match actual sensor count
