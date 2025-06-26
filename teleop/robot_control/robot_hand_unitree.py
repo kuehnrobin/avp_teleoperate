@@ -229,9 +229,9 @@ class Dex3_1_Controller:
         try:
             while self.running:
                 start_time = time.time()
-                # get dual hand state
-                left_hand_mat  = np.array(left_hand_array[:]).reshape(25, 3).copy()
-                right_hand_mat = np.array(right_hand_array[:]).reshape(25, 3).copy()
+                # get dual hand state form OpenXR device
+                left_hand_mat  = np.array(left_hand_array[:]).reshape(25, 3).copy() # 25 joints, each with 3D position
+                right_hand_mat = np.array(right_hand_array[:]).reshape(25, 3).copy() # 25 joints, each with 3D position
 
                 # Read left and right q_state from shared arrays
                 state_data = np.concatenate((np.array(left_hand_state_array[:]), np.array(right_hand_state_array[:])))
@@ -243,13 +243,15 @@ class Dex3_1_Controller:
                     
                     # Process left hand
                     left_indices = self.hand_retargeting.left_retargeting.optimizer.target_link_human_indices
-                    if left_retargeting_type ==  "POSITION":
-                        # Vector method: use absolute fingertip positions (original simple method)
+                    if left_retargeting_type ==  "POSITION": # Ist das Ein bug? Ist das Absicht mit Position?? 
+                        # Vector method: use absolute fingertip positions
                         ref_left_value = left_hand_mat[unitree_tip_indices]
-                        ref_left_value[0] = ref_left_value[0] * 1.15
-                        ref_left_value[1] = ref_left_value[1] * 1.05
-                        ref_left_value[2] = ref_left_value[2] * 0.95
+                        # -------- Tune for Vector Retargeting Method --------
+                        ref_left_value[0] = ref_left_value[0] * 1.15 # Scale thumb position
+                        ref_left_value[1] = ref_left_value[1] * 1.05 # Scale index position
+                        ref_left_value[2] = ref_left_value[2] * 0.95 # Scale middle position
                         left_q_target = self.hand_retargeting.left_retargeting.retarget(ref_left_value)[self.hand_retargeting.left_dex_retargeting_to_hardware]
+
                     elif left_retargeting_type == "DEXPILOT":
                         # DexPilot method: use relative positions (vectors between joints)
                         # DexPilot expects 6 vectors for a 3-finger hand:
