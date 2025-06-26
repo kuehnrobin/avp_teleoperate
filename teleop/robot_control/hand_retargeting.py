@@ -61,7 +61,7 @@ class HandRetargeting:
                 if 'left' not in self.cfg or 'right' not in self.cfg:
                     raise ValueError("Configuration file must contain 'left' and 'right' keys.")
 
-                # For vector retargeting, the structure is now flat (no nested 'retargeting' key)
+                # For vector retargeting
                 left_retargeting_config = RetargetingConfig.from_dict(self.cfg['left'])
                 right_retargeting_config = RetargetingConfig.from_dict(self.cfg['right'])
             
@@ -69,18 +69,23 @@ class HandRetargeting:
             self.right_retargeting = right_retargeting_config.build()
 
             # For both DexPilot and vector retargeting, joint_names should be available
-            try:
-                self.left_retargeting_joint_names = self.left_retargeting.joint_names
-                self.right_retargeting_joint_names = self.right_retargeting.joint_names
-            except AttributeError:
-                # Fallback for older configurations
-                if retargeting_method == 'dexpilot':
-                    # For DexPilot, we work with fingertip positions, not joint names
-                    self.left_retargeting_joint_names = ['thumb_tip', 'index_tip', 'middle_tip']
-                    self.right_retargeting_joint_names = ['thumb_tip', 'index_tip', 'middle_tip']
-                else:
-                    raise
-
+            ## ----- Macht das hier probleme?? --
+            # Moved to arcive to test if this is the problem area
+            # try:
+            #     self.left_retargeting_joint_names = self.left_retargeting.joint_names
+            #     self.right_retargeting_joint_names = self.right_retargeting.joint_names
+            # except AttributeError:
+            #     # Fallback for older configurations
+            #     if retargeting_method == 'dexpilot':
+            #         # For DexPilot, we work with fingertip positions, not joint names
+            #         self.left_retargeting_joint_names = ['thumb_tip', 'index_tip', 'middle_tip']
+            #         self.right_retargeting_joint_names = ['thumb_tip', 'index_tip', 'middle_tip']
+            #     else:
+            #         raise
+            # Instead of the above, we now use the following:
+            self.left_retargeting_joint_names = self.left_retargeting.joint_names
+            self.right_retargeting_joint_names = self.right_retargeting.joint_names
+            # ------ End of potential problem area ------
             if hand_type == HandType.UNITREE_DEX3 or hand_type == HandType.UNITREE_DEX3_Unit_Test:
                 # In section "Sort by message structure" of https://support.unitree.com/home/en/G1_developer/dexterous_hand
                 self.left_dex3_api_joint_names  = [ 'left_hand_thumb_0_joint', 'left_hand_thumb_1_joint', 'left_hand_thumb_2_joint',
