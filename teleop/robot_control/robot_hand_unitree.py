@@ -23,7 +23,7 @@ from teleop.utils.weighted_moving_filter import WeightedMovingFilter
 # Import thumb pinch corrector
 parent_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(parent_dir)
-from thumb_pinch_corrector import ThumbPinchCorrector
+#from thumb_pinch_corrector import ThumbPinchCorrector
 
 # OpenXR hand joint indices for thumb, index, middle fingertips
 unitree_tip_indices = [4, 9, 14] # [thumb, index, middle] in OpenXR
@@ -80,8 +80,8 @@ class Dex3_1_Controller:
             ChannelFactoryInitialize(0, networkInterface)
         
         # Initialize thumb pinch correctors for both hands
-        self.left_thumb_corrector = ThumbPinchCorrector()
-        self.right_thumb_corrector = ThumbPinchCorrector()
+        #self.left_thumb_corrector = ThumbPinchCorrector()
+        #self.right_thumb_corrector = ThumbPinchCorrector()
 
         # initialize handcmd publisher and handstate subscriber
         self.LeftHandCmb_publisher = ChannelPublisher(kTopicDex3LeftCommand, HandCmd_)
@@ -288,16 +288,17 @@ class Dex3_1_Controller:
                         dexpilot_output = self.hand_retargeting.left_retargeting.retarget(ref_left_value)
                         
                         # Apply thumb pinch correction to DexPilot output (optional - can be disabled)
+                        # ----------------------
                         # Extract fingertip positions for pinch detection
-                        thumb_tip_pos = left_hand_mat[4]   # OpenXR index 4
-                        index_tip_pos = left_hand_mat[9]   # OpenXR index 9  
-                        middle_tip_pos = left_hand_mat[14] # OpenXR index 14
+                        # thumb_tip_pos = left_hand_mat[4]   # OpenXR index 4
+                        # index_tip_pos = left_hand_mat[9]   # OpenXR index 9  
+                        # middle_tip_pos = left_hand_mat[14] # OpenXR index 14
                         
-                        # Apply correction to the DexPilot output
-                        dexpilot_output = self.left_thumb_corrector.apply_correction(
-                            dexpilot_output, thumb_tip_pos, index_tip_pos, middle_tip_pos
-                        )
-                        
+                        # # Apply correction to the DexPilot output
+                        # dexpilot_output = self.left_thumb_corrector.apply_correction(
+                        #     dexpilot_output, thumb_tip_pos, index_tip_pos, middle_tip_pos
+                        # )
+                        #------------------------------------------------
                         # Map from URDF order to Hardware API order
                         # DexPilot returns the full 7-joint array with fixed joints already set
                         # We just need to map from URDF order to Hardware API order
@@ -364,16 +365,17 @@ class Dex3_1_Controller:
                         dexpilot_output = self.hand_retargeting.right_retargeting.retarget(ref_right_value)
                         
                         # Apply thumb pinch correction to DexPilot output (optional - can be disabled)
+                        # ----------------------
                         # Extract fingertip positions for pinch detection
-                        thumb_tip_pos = right_hand_mat[4]   # OpenXR index 4
-                        index_tip_pos = right_hand_mat[9]   # OpenXR index 9  
-                        middle_tip_pos = right_hand_mat[14] # OpenXR index 14
+                        # thumb_tip_pos = right_hand_mat[4]   # OpenXR index 4
+                        # index_tip_pos = right_hand_mat[9]   # OpenXR index 9  
+                        # middle_tip_pos = right_hand_mat[14] # OpenXR index 14
                         
-                        # Apply correction to the DexPilot output
-                        dexpilot_output = self.right_thumb_corrector.apply_correction(
-                            dexpilot_output, thumb_tip_pos, index_tip_pos, middle_tip_pos
-                        )
-                        
+                        # # Apply correction to the DexPilot output
+                        # dexpilot_output = self.right_thumb_corrector.apply_correction(
+                        #     dexpilot_output, thumb_tip_pos, index_tip_pos, middle_tip_pos
+                        # )
+                        # ------------------------------------------------
                         # Map from URDF order to Hardware API order
                         # DexPilot returns the full 7-joint array with fixed joints already set
                         right_q_target = np.zeros(Dex3_Num_Motors)
