@@ -4,15 +4,16 @@ retargeting:
   
   # Source refers to the retargeting input, which usually corresponds to the human hand
   # The joint indices of human hand joint which corresponds to each link in the target_link_names
+  # Based on the Hand Joint index from https://support.unitree.com/home/en/G1_developer/dexterous_hand
   target_joint_names: 
     [
-      "right_hand_thumb_0_joint",
-      "right_hand_thumb_1_joint",
-      "right_hand_thumb_2_joint",
-      "right_hand_index_0_joint",
-      "right_hand_index_1_joint",
-      "right_hand_middle_0_joint",
-      "right_hand_middle_1_joint",
+      "right_hand_thumb_0_joint", # 0
+      "right_hand_thumb_1_joint", # 1
+      "right_hand_thumb_2_joint", # 2
+      "right_hand_middle_0_joint", # 3
+      "right_hand_middle_1_joint", # 4
+      "right_hand_index_0_joint", # 5
+      "right_hand_index_1_joint", # 6
     ]
   # The link on the robot hand which corresponding to the wrist of human hand
   wrist_link_name: "base_link"
