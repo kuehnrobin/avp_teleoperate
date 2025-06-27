@@ -117,12 +117,13 @@ class HandRetargeting:
                 self.left_dex_retargeting_to_hardware = [ self.left_retargeting_joint_names.index(name) for name in self.left_inspire_api_joint_names]
                 self.right_dex_retargeting_to_hardware = [ self.right_retargeting_joint_names.index(name) for name in self.right_inspire_api_joint_names]
         
-        except FileNotFoundError:
-            print(f"Configuration file not found: {config_file_path}")
+        except FileNotFoundError as e:
+            config_path = getattr(e, 'filename', 'unknown config file')
+            print(f"Configuration file not found: {config_path}")
             raise
         except yaml.YAMLError as e:
-            print(f"YAML error while reading {config_file_path}: {e}")
+            print(f"YAML error while reading configuration: {e}")
             raise
         except Exception as e:
-            print(f"An error occurred: {e}")
+            print(f"An error occurred while loading configuration: {e}")
             raise
