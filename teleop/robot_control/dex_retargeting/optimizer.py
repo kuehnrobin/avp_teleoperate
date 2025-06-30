@@ -685,7 +685,7 @@ class DexPilotOptimizer(Optimizer):
         projected_dist = np.array([eta1] * (num_fingers - 1) + [eta2] * ((num_fingers - 1) * (num_fingers - 2) // 2))
         return projected, s2_project_index_origin, s2_project_index_task, projected_dist
     def get_objective_function(self, target_vector: np.ndarray, fixed_qpos: np.ndarray, last_qpos: np.ndarray):
-        debug_mode = True  # Enable debug for EARTH CORE MISSION! 🌍⛏️
+        debug_mode = True  # Enable debug for DYNAMIC EARTH CORE MISSION! 🌍🔄
         if debug_mode:
             print(f"[DEBUG] DexPilot get_objective_function called")
             print(f"[DEBUG] target_vector shape: {target_vector.shape}")
@@ -865,36 +865,65 @@ class DexPilotOptimizer(Optimizer):
                 if thumb_0_idx is not None:
                     thumb_0_angle = x[thumb_0_idx]
                     
-                    # EARTH CORE MISSION: Drill thumb_0_joint to Earth's core! 🌍⛏️
-                    # Target NEGATIVE angles to rotate thumb TOWARD palm for better opposition
-                    optimal_target = np.deg2rad(-45.0)  # TARGET: -45° (EARTH CORE MISSION!)
-                    hard_min = np.deg2rad(-60.0)        # Hard limit: -60° (maximum joint range)
-                    hard_max = np.deg2rad(-30.0)        # Hard limit: -30° (force extreme negative!)
+                    # DYNAMIC EARTH CORE MISSION: Adaptive thumb behavior! 🌍🔄
+                    # Check if pinching is happening by looking at target distances
+                    thumb_index_target_dist = torch.norm(torch_target_vec[0, :]) if len(torch_target_vec) > 0 else float('inf')
+                    thumb_middle_target_dist = torch.norm(torch_target_vec[1, :]) if len(torch_target_vec) > 1 else float('inf')
+                    
+                    # Detect if user is trying to pinch (target distance < 5cm)
+                    is_pinching = thumb_index_target_dist < 0.05 or thumb_middle_target_dist < 0.05
+                    
+                    if is_pinching:
+                        # PINCHING MODE: Target -60° for optimal thumb-to-index opposition!
+                        # Target -60° specifically for better pinching geometry
+                        optimal_target = np.deg2rad(-60.0)  # TARGET -60° for pinching! 🤏
+                        hard_min = np.deg2rad(-60.0)        # Joint limit: -60°
+                        hard_max = np.deg2rad(60.0)         # Joint limit: +60°
+                        
+                        # GENTLE penalties when pinching - target -60° specifically!
+                        if thumb_0_angle < hard_min:
+                            penalty_val = 50 * (thumb_0_angle - hard_min)**2  # Gentle boundary
+                            thumb_angle_penalty += penalty_val
+                            if debug_mode:
+                                print(f"[EARTH-PINCH] 🌍🤏 Gentle penalty at -60° limit: {penalty_val:.6f}")
+                        elif thumb_0_angle > hard_max:
+                            penalty_val = 50 * (thumb_0_angle - hard_max)**2  # Gentle boundary
+                            thumb_angle_penalty += penalty_val
+                            if debug_mode:
+                                print(f"[EARTH-PINCH] 🌍🤏 Gentle penalty at +60° limit: {penalty_val:.6f}")
+                        else:
+                            # STRONG bias toward -60° when pinching for optimal geometry!
+                            bias_penalty = 200 * (thumb_0_angle - optimal_target)**2  # Strong bias toward -60°!
+                            thumb_angle_penalty += bias_penalty
+                            if debug_mode:
+                                print(f"[EARTH-PINCH] 🌍🤏 TARGETING -60° for pinching! Bias: {bias_penalty:.6f}")
+                    else:
+                        # NON-PINCHING MODE: Strong bias toward -45° (Earth Core default)
+                        optimal_target = np.deg2rad(-45.0)  # TARGET: -45° (EARTH CORE!)
+                        hard_min = np.deg2rad(-60.0)        # Hard limit: -60°
+                        hard_max = np.deg2rad(-30.0)        # Hard limit: -30°
+                        
+                        # NUCLEAR penalties when NOT pinching - keep thumb at -45°
+                        if thumb_0_angle > hard_max:
+                            penalty_val = 5000 * (thumb_0_angle - hard_max)**2  # NUCLEAR penalty!
+                            thumb_angle_penalty += penalty_val
+                            if debug_mode:
+                                print(f"[EARTH] 🌍⛏️ Thumb above -30°! NUCLEAR penalty: {penalty_val:.6f}")
+                        elif thumb_0_angle < hard_min:
+                            penalty_val = 1500 * (thumb_0_angle - hard_min)**2  # Strong boundary
+                            thumb_angle_penalty += penalty_val
+                            if debug_mode:
+                                print(f"[EARTH] Thumb below -60°! Strong penalty: {penalty_val:.6f}")
+                        else:
+                            # NUCLEAR bias toward -45° when not pinching
+                            bias_penalty = 1000 * (thumb_0_angle - optimal_target)**2  # NUCLEAR!
+                            thumb_angle_penalty += bias_penalty
+                            if debug_mode:
+                                print(f"[EARTH] 🌍⛏️ DRILLING toward -45°! Nuclear bias: {bias_penalty:.6f}")
                     
                     if debug_mode:
-                        print(f"[DEBUG] thumb_0_idx: {thumb_0_idx}, thumb_0_angle: {thumb_0_angle:.5f} rad ({np.rad2deg(thumb_0_angle):.2f}°)")
-                        print(f"[DEBUG] optimal_target: {optimal_target:.5f} rad ({np.rad2deg(optimal_target):.2f}°)")
-                        print(f"[DEBUG] hard_min: {hard_min:.5f} rad ({np.rad2deg(hard_min):.2f}°)")
-                        print(f"[DEBUG] hard_max: {hard_max:.5f} rad ({np.rad2deg(hard_max):.2f}°)")
-                    
-                    # EARTH CORE PENALTIES: Force thumb to EXTREME negative values  
-                    if thumb_0_angle > hard_max:
-                        # NUCLEAR penalty for being above -30° - FORCE thumb to extreme negative values!
-                        penalty_val = 5000 * (thumb_0_angle - hard_max)**2  # NUCLEAR penalty!
-                        thumb_angle_penalty += penalty_val
-                        if debug_mode:
-                            print(f"[EARTH] 🌍⛏️ Thumb above -30°! NUCLEAR penalty: {penalty_val:.6f}")
-                    elif thumb_0_angle < hard_min:
-                        penalty_val = 1500 * (thumb_0_angle - hard_min)**2  # Stronger penalty for exceeding limits
-                        thumb_angle_penalty += penalty_val
-                        if debug_mode:
-                            print(f"[EARTH] Thumb below -60°! Strong penalty: {penalty_val:.6f}")
-                    else:
-                        # NUCLEAR bias toward -45° for EARTH CORE!
-                        bias_penalty = 1000 * (thumb_0_angle - optimal_target)**2  # NUCLEAR push toward -45°!
-                        thumb_angle_penalty += bias_penalty
-                        if debug_mode:
-                            print(f"[EARTH] 🌍⛏️ DRILLING thumb toward -45°! Bias penalty: {bias_penalty:.6f}")
+                        print(f"[DEBUG] thumb_0_angle: {thumb_0_angle:.5f} rad ({np.rad2deg(thumb_0_angle):.2f}°)")
+                        print(f"[DEBUG] is_pinching: {is_pinching}, thumb_index_dist: {thumb_index_target_dist:.4f}, thumb_middle_dist: {thumb_middle_target_dist:.4f}")
 
                 # Add penalty for gaps between thumb and primary fingers during pinching
                 thumb_index_target_dist = torch.norm(torch_target_vec[0, :]) if len(torch_target_vec) > 0 else float('inf')
@@ -974,20 +1003,41 @@ class DexPilotOptimizer(Optimizer):
                     
                     # Add the joint angle penalty gradient and regularization
                     if thumb_0_idx is not None:
-                        # EARTH CORE GRADIENT: Match the updated penalty logic with extreme bias toward negative angles
-                        optimal_target = np.deg2rad(-45.0)  # Target: -45° (EARTH CORE!)
-                        hard_min = np.deg2rad(-60.0)        # Hard limit: -60°
-                        hard_max = np.deg2rad(-30.0)        # Hard limit: -30°
+                        # DYNAMIC EARTH CORE GRADIENT: Adaptive based on pinching state 🌍🔄
+                        thumb_index_target_dist = torch.norm(torch_target_vec[0, :]) if len(torch_target_vec) > 0 else float('inf')
+                        thumb_middle_target_dist = torch.norm(torch_target_vec[1, :]) if len(torch_target_vec) > 1 else float('inf')
+                        is_pinching = thumb_index_target_dist < 0.05 or thumb_middle_target_dist < 0.05
                         
-                        if thumb_0_angle > hard_max:
-                            # NUCLEAR gradient pushes thumb away from being above -30°
-                            grad_qpos[thumb_0_idx] += 10000 * (thumb_0_angle - hard_max)  # NUCLEAR push toward -30°!
-                        elif thumb_0_angle < hard_min:
-                            # Stronger gradient pushes thumb away from hard minimum
-                            grad_qpos[thumb_0_idx] += 3000 * (thumb_0_angle - hard_min)  # Stronger push away from -60°
+                        if is_pinching:
+                            # PINCHING GRADIENTS: Strong bias toward -60° for optimal pinching!
+                            optimal_target = np.deg2rad(-60.0)  # TARGET -60° for pinching! 🤏
+                            hard_min = np.deg2rad(-60.0)        # Joint limit: -60°
+                            hard_max = np.deg2rad(60.0)         # Joint limit: +60°
+                            
+                            if thumb_0_angle < hard_min:
+                                # Gentle gradient at joint boundary
+                                grad_qpos[thumb_0_idx] += 100 * (thumb_0_angle - hard_min)  # Gentle boundary push
+                            elif thumb_0_angle > hard_max:
+                                # Gentle gradient at joint boundary
+                                grad_qpos[thumb_0_idx] += 100 * (thumb_0_angle - hard_max)  # Gentle boundary push
+                            else:
+                                # STRONG bias toward -60° when pinching for optimal geometry!
+                                grad_qpos[thumb_0_idx] += 400 * (thumb_0_angle - optimal_target)  # STRONG bias toward -60°!
                         else:
-                            # NUCLEAR gradient biases thumb toward optimal target (-45°)
-                            grad_qpos[thumb_0_idx] += 2000 * (thumb_0_angle - optimal_target)  # NUCLEAR bias toward -45°!
+                            # NON-PINCHING GRADIENTS: Nuclear bias toward -45°
+                            optimal_target = np.deg2rad(-45.0)  # Target: -45° (EARTH CORE!)
+                            hard_min = np.deg2rad(-60.0)        # Hard limit: -60°
+                            hard_max = np.deg2rad(-30.0)        # Hard limit: -30°
+                            
+                            if thumb_0_angle > hard_max:
+                                # NUCLEAR gradient pushes thumb away from being above -30°
+                                grad_qpos[thumb_0_idx] += 10000 * (thumb_0_angle - hard_max)  # NUCLEAR push toward -30°!
+                            elif thumb_0_angle < hard_min:
+                                # Strong gradient pushes thumb away from hard minimum
+                                grad_qpos[thumb_0_idx] += 3000 * (thumb_0_angle - hard_min)  # Strong push away from -60°
+                            else:
+                                # NUCLEAR gradient biases thumb toward optimal target (-45°)
+                                grad_qpos[thumb_0_idx] += 2000 * (thumb_0_angle - optimal_target)  # NUCLEAR bias toward -45°!
                     
                     grad_qpos += 2 * self.gamma * x  # Add regularization
                     
