@@ -545,7 +545,7 @@ class DexPilotOptimizer(Optimizer):
         project_dist=0.03,
         escape_dist=0.05,
         eta1=1e-4,
-        eta2=3e-2,
+        eta2=0,
         scaling=1.0,
     ):
         if len(finger_tip_link_names) < 2 or len(finger_tip_link_names) > 5:
@@ -680,7 +680,50 @@ class DexPilotOptimizer(Optimizer):
                 self.huber_loss(vec_dist, torch.zeros_like(vec_dist)) * weight / (robot_vec.shape[0])
             ).sum()
             huber_distance = huber_distance.sum()
-            result = huber_distance.cpu().detach().item()
+
+            # Add penalty for thumb being too low
+            thumb_tip_idx = self.computed_link_names.index("thumb_tip")
+            index_tip_idx = self.computed_link_names.index("index_tip")
+            middle_tip_idx = self.computed_link_names.index("middle_tip")
+
+            thumb_pos = torch_body_pos[thumb_tip_idx, :]
+            index_pos = torch_body_pos[index_tip_idx, :]
+            middle_pos = torch_body_pos[middle_tip_idx, :]
+
+            thumb_index_diff = thumb_pos[2] - index_pos[2]
+            thumb_middle_diff = thumb_pos[2] - middle_pos[2]
+
+            thumb_penalty = 0.0
+            if thumb_index_diff.item() < -0.02:  # If thumb is more than 2 cm below index finger
+                thumb_penalty += 100 * (thumb_index_diff + 0.02)**2
+            if thumb_middle_diff.item() < -0.02:  # If thumb is more than 2 cm below middle finger
+                thumb_penalty += 100 * (thumb_middle_diff + 0.02)**2
+
+            # Add penalty for thumb_0 joint angle being too large
+            thumb_0_idx = self.target_joint_names.index("left_hand_thumb_0_joint")
+            thumb_0_angle = x[thumb_0_idx]
+            thumb_angle_penalty = 0.0
+            if thumb_0_angle > np.deg2rad(30):  # If thumb_0 angle is greater than 30 degrees
+                thumb_angle_penalty += 50 * (thumb_0_angle - np.deg2rad(30))**2  # Reduced weight
+
+            # Add penalty for gaps between thumb and primary fingers during pinching
+            thumb_index_target_dist = torch.norm(torch_target_vec[0, :]) if len(torch_target_vec) > 0 else float('inf')
+            thumb_middle_target_dist = torch.norm(torch_target_vec[1, :]) if len(torch_target_vec) > 1 else float('inf')
+
+            if thumb_index_target_dist < 0.03:  # If target distance is less than 3 cm (pinching)
+                thumb_index_actual_dist = torch.norm(thumb_pos - index_pos)
+                if thumb_index_actual_dist > 0.03:
+                    gap_penalty = 200 * (thumb_index_actual_dist - 0.03)**2
+                    thumb_penalty += gap_penalty.item()
+
+            if thumb_middle_target_dist < 0.03:  # If target distance is less than 3 cm (pinching)
+                thumb_middle_actual_dist = torch.norm(thumb_pos - middle_pos)
+                if thumb_middle_actual_dist > 0.03:
+                    gap_penalty = 200 * (thumb_middle_actual_dist - 0.03)**2
+                    thumb_penalty += gap_penalty.item()
+
+            result = huber_distance.cpu().detach().item() + thumb_penalty + thumb_angle_penalty
+
             if grad.size > 0:
                 jacobians = []
                 for i, index in enumerate(self.computed_link_indices):
@@ -693,13 +736,50 @@ class DexPilotOptimizer(Optimizer):
                 jacobians = np.stack(jacobians, axis=0)
                 huber_distance.backward()
                 grad_pos = torch_body_pos.grad.cpu().numpy()[:, None, :]
+
+                # Compute gradient of thumb position penalty term
+                if thumb_index_diff.item() < -0.02:
+                    grad_pos[thumb_tip_idx, 0, 2] += 200 * (thumb_index_diff + 0.02).item()
+                    grad_pos[index_tip_idx, 0, 2] -= 200 * (thumb_index_diff + 0.02).item()
+                if thumb_middle_diff.item() < -0.02:
+                    grad_pos[thumb_tip_idx, 0, 2] += 200 * (thumb_middle_diff + 0.02).item()
+                    grad_pos[middle_tip_idx, 0, 2] -= 200 * (thumb_middle_diff + 0.02).item()
+
                 # Convert the jacobian from pinocchio order to target order
                 if self.adaptor is not None:
                     jacobians = self.adaptor.backward_jacobian(jacobians)
                 else:
                     jacobians = jacobians[..., self.idx_pin2target]
+
                 grad_qpos = np.matmul(grad_pos, np.array(jacobians))
                 grad_qpos = grad_qpos.mean(1).sum(0)
+
+                # Compute gradient of thumb angle penalty term
+                if thumb_0_angle > np.deg2rad(30):
+                    grad_qpos[thumb_0_idx] += 100 * (thumb_0_angle - np.deg2rad(30))
+
+                # Compute gradient of gap penalty term
+                thumb_index_actual_dist = torch.norm(thumb_pos - index_pos)
+                thumb_middle_actual_dist = torch.norm(thumb_pos - middle_pos)
+
+                if thumb_index_target_dist < 0.03 and thumb_index_actual_dist > 0.03:
+                    direction = (thumb_pos - index_pos).cpu().numpy()
+                    if np.linalg.norm(direction) > 1e-6:
+                        direction = direction / np.linalg.norm(direction)
+                    grad_pos[thumb_tip_idx, 0, :] += 400 * (thumb_index_actual_dist - 0.03).item() * direction
+                    grad_pos[index_tip_idx, 0, :] -= 400 * (thumb_index_actual_dist - 0.03).item() * direction
+
+                if thumb_middle_target_dist < 0.03 and thumb_middle_actual_dist > 0.03:
+                    direction = (thumb_pos - middle_pos).cpu().numpy()
+                    if np.linalg.norm(direction) > 1e-6:
+                        direction = direction / np.linalg.norm(direction)
+                    grad_pos[thumb_tip_idx, 0, :] += 400 * (thumb_middle_actual_dist - 0.03).item() * direction
+                    grad_pos[middle_tip_idx, 0, :] -= 400 * (thumb_middle_actual_dist - 0.03).item() * direction
+
+                # Update grad_qpos with gap penalty gradients
+                grad_qpos = np.matmul(grad_pos, np.array(jacobians))
+                grad_qpos = grad_qpos.mean(1).sum(0)
+
                 # Change this line to use gamma instead of norm_delta
                 grad_qpos += 2 * self.gamma * x
                 grad[:] = grad_qpos[:]
