@@ -570,7 +570,7 @@ class DexPilotOptimizer(Optimizer):
         huber_delta=0.03,
         norm_delta=4e-3,
         # DexPilot parameters
-        gamma=2.5e-3,
+        gamma=6e-3,  # Increased from 2.5e-3 to encourage more open hand position
         project_dist=0.03,
         escape_dist=0.05,
         eta1=1e-4,
@@ -823,13 +823,13 @@ class DexPilotOptimizer(Optimizer):
 
                 thumb_penalty = 0.0
                 if thumb_index_diff.item() < -0.02:  # If thumb is more than 2 cm below index finger
-                    penalty_val = 100 * (thumb_index_diff + 0.02)**2
+                    penalty_val = 300 * (thumb_index_diff + 0.02)**2  # Increased from 100 to 300
                     thumb_penalty += penalty_val.detach().item() if hasattr(penalty_val, 'detach') else penalty_val
                 if thumb_middle_diff.item() < -0.02:  # If thumb is more than 2 cm below middle finger
-                    penalty_val = 100 * (thumb_middle_diff + 0.02)**2
+                    penalty_val = 300 * (thumb_middle_diff + 0.02)**2  # Increased from 100 to 300
                     thumb_penalty += penalty_val.detach().item() if hasattr(penalty_val, 'detach') else penalty_val
 
-                # Add penalty for thumb_0 joint angle being too large
+                # Add penalty for thumb_0 joint angle deviating from optimal range
                 thumb_0_idx = None
                 for i, joint_name in enumerate(self.target_joint_names):
                     if "thumb_0_joint" in joint_name:
@@ -839,28 +839,38 @@ class DexPilotOptimizer(Optimizer):
                 thumb_angle_penalty = 0.0
                 if thumb_0_idx is not None:
                     thumb_0_angle = x[thumb_0_idx]
-                    if thumb_0_angle > np.deg2rad(30):  # If thumb_0 angle is greater than 30 degrees
-                        thumb_angle_penalty += 50 * (thumb_0_angle - np.deg2rad(30))**2  # Reduced weight
+                    # FIXED: Encourage thumb to stay in optimal range (-10° to +30°)
+                    # Penalize if thumb is too far inward (negative) or too far outward (positive)
+                    optimal_min = np.deg2rad(-10)  # Allow slight inward rotation
+                    optimal_max = np.deg2rad(30)   # Prevent excessive outward rotation
+                    
+                    if thumb_0_angle < optimal_min:
+                        # Penalty for being too far inward (too negative)
+                        thumb_angle_penalty += 100 * (thumb_0_angle - optimal_min)**2
+                    elif thumb_0_angle > optimal_max:
+                        # Penalty for being too far outward (too positive)
+                        thumb_angle_penalty += 100 * (thumb_0_angle - optimal_max)**2
 
                 # Add penalty for gaps between thumb and primary fingers during pinching
                 thumb_index_target_dist = torch.norm(torch_target_vec[0, :]) if len(torch_target_vec) > 0 else float('inf')
                 thumb_middle_target_dist = torch.norm(torch_target_vec[1, :]) if len(torch_target_vec) > 1 else float('inf')
 
+                gap_penalty = 0.0
                 if thumb_index_target_dist < 0.03:  # If target distance is less than 3 cm (pinching)
                     thumb_index_actual_dist = torch.norm(thumb_pos - index_pos)
                     if thumb_index_actual_dist > 0.03:
-                        gap_penalty = 200 * (thumb_index_actual_dist - 0.03)**2
-                        thumb_penalty += gap_penalty.detach().item() if hasattr(gap_penalty, 'detach') else gap_penalty.item()
+                        gap_penalty_val = 200 * (thumb_index_actual_dist - 0.03)**2
+                        gap_penalty += gap_penalty_val.detach().item() if hasattr(gap_penalty_val, 'detach') else gap_penalty_val.item()
 
                 if thumb_middle_target_dist < 0.03:  # If target distance is less than 3 cm (pinching)
                     thumb_middle_actual_dist = torch.norm(thumb_pos - middle_pos)
                     if thumb_middle_actual_dist > 0.03:
-                        gap_penalty = 200 * (thumb_middle_actual_dist - 0.03)**2
-                        thumb_penalty += gap_penalty.detach().item() if hasattr(gap_penalty, 'detach') else gap_penalty.item()
+                        gap_penalty_val = 200 * (thumb_middle_actual_dist - 0.03)**2
+                        gap_penalty += gap_penalty_val.detach().item() if hasattr(gap_penalty_val, 'detach') else gap_penalty_val.item()
 
-                result = huber_distance.cpu().detach().item() + thumb_penalty + thumb_angle_penalty
+                result = huber_distance.cpu().detach().item() + thumb_penalty + thumb_angle_penalty + gap_penalty
                 if debug_mode:
-                    print(f"[DEBUG] Final result: {result} (huber: {huber_distance.cpu().detach().item()}, thumb: {thumb_penalty}, angle: {thumb_angle_penalty})")
+                    print(f"[DEBUG] Final result: {result} (huber: {huber_distance.cpu().detach().item()}, thumb: {thumb_penalty}, angle: {thumb_angle_penalty}, gap: {gap_penalty})")
                 
                 if np.isnan(result) or np.isinf(result):
                     if debug_mode:
@@ -882,16 +892,17 @@ class DexPilotOptimizer(Optimizer):
 
                     # Compute gradient of thumb position penalty term
                     if thumb_index_diff.item() < -0.02:
-                        grad_pos[thumb_tip_idx, 0, 2] += 200 * (thumb_index_diff.detach() + 0.02).item()
-                        grad_pos[index_tip_idx, 0, 2] -= 200 * (thumb_index_diff.detach() + 0.02).item()
+                        grad_pos[thumb_tip_idx, 0, 2] += 600 * (thumb_index_diff.detach() + 0.02).item()  # Updated gradient weight
+                        grad_pos[index_tip_idx, 0, 2] -= 600 * (thumb_index_diff.detach() + 0.02).item()
                     if thumb_middle_diff.item() < -0.02:
-                        grad_pos[thumb_tip_idx, 0, 2] += 200 * (thumb_middle_diff.detach() + 0.02).item()
-                        grad_pos[middle_tip_idx, 0, 2] -= 200 * (thumb_middle_diff.detach() + 0.02).item()
+                        grad_pos[thumb_tip_idx, 0, 2] += 600 * (thumb_middle_diff.detach() + 0.02).item()  # Updated gradient weight
+                        grad_pos[middle_tip_idx, 0, 2] -= 600 * (thumb_middle_diff.detach() + 0.02).item()
 
                     # Compute gradient of gap penalty term
                     thumb_index_actual_dist = torch.norm(thumb_pos - index_pos)
                     thumb_middle_actual_dist = torch.norm(thumb_pos - middle_pos)
 
+                    # Pinching gap penalties
                     if thumb_index_target_dist < 0.03 and thumb_index_actual_dist > 0.03:
                         direction = (thumb_pos - index_pos).detach().cpu().numpy()
                         if np.linalg.norm(direction) > 1e-6:
@@ -917,8 +928,17 @@ class DexPilotOptimizer(Optimizer):
                     grad_qpos = grad_qpos.mean(1).sum(0)
                     
                     # Add the joint angle penalty gradient and regularization
-                    if thumb_0_idx is not None and thumb_0_angle > np.deg2rad(30):
-                        grad_qpos[thumb_0_idx] += 100 * (thumb_0_angle - np.deg2rad(30))
+                    if thumb_0_idx is not None:
+                        # FIXED: Match the updated penalty logic for optimal thumb range
+                        optimal_min = np.deg2rad(-10)  # Allow slight inward rotation
+                        optimal_max = np.deg2rad(30)   # Prevent excessive outward rotation
+                        
+                        if thumb_0_angle < optimal_min:
+                            # Gradient pushes thumb toward optimal_min (less negative)
+                            grad_qpos[thumb_0_idx] += 200 * (thumb_0_angle - optimal_min)
+                        elif thumb_0_angle > optimal_max:
+                            # Gradient pushes thumb toward optimal_max (less positive)
+                            grad_qpos[thumb_0_idx] += 200 * (thumb_0_angle - optimal_max)
                     
                     grad_qpos += 2 * self.gamma * x  # Add regularization
                     
