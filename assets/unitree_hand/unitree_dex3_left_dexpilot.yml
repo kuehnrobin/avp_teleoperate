@@ -20,13 +20,22 @@ retargeting:
   # DexPilot retargeting link names
   finger_tip_link_names: ["left_hand_thumb_2_link", "left_hand_middle_1_link", "left_hand_index_1_link"] # thumb, middle, index
   
+  #scaling_factor: 1.0 # Betha
+
+  # etha_1 closes the distance between a primary finger an the thumb, very relevant
+  etha_1: 1e-4 # Was passiert wenn vergrößert wird?
+  # etha_2 forces a minimum separation distance between two promary fingers when both primary fingers are being projected with the thumb. 
+  # Not relevant sice the primary finger have only two DOF
+  etha_2: 3e-2 # Verkleinern
   # Optimization parameters # Change??? 
-  normal_delta:  4e-3
-  huber_delta: 2e-2
+  normal_delta:  4e-3 # ?
+  huber_delta: 2e-2 # ?
+
+  gamma : 2.5e-3 # 2.5e-3 # gamma is a weight to regulize the robot hand angles to zero /open Hand Position
 
   # DexPilot parameters
-  project_dist: 0.03  # 1.5cm - enter grasp mode very early # TODO überprüfen
-  escape_dist: 0.05     # 8cm - stable grasp mode with more hysteresis # TODO überprüfen
+  project_dist: 0.03  
+  escape_dist: 0.05 
   
   # A smaller alpha means stronger filtering, i.e. more smooth but also larger latency
   low_pass_alpha: 0.2 #0.1
