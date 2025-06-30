@@ -287,28 +287,12 @@ class Dex3_1_Controller:
                         # URDF Joint 1: left_hand_index_1_joint (Hardware Index 6)  
                         # URDF Joint 6: left_hand_thumb_2_joint (Hardware Index 2)
                         # DexPilot optimizes all 7 joints - no fixed_qpos needed
-                        dexpilot_output = self.hand_retargeting.left_retargeting.retarget(ref_left_value)
-                        left_q_target = dexpilot_output
-                        # Bringt das hierunter überhaupt was?
-                        # Was ist die Reihenfolge die Dexpilot rausgibt??
-
-                        # Apply thumb pinch correction to DexPilot output (optional - can be disabled)
-                        # ----------------------
-                        # Extract fingertip positions for pinch detection
-                        # thumb_tip_pos = left_hand_mat[4]   # OpenXR index 4
-                        # index_tip_pos = left_hand_mat[9]   # OpenXR index 9  
-                        # middle_tip_pos = left_hand_mat[14] # OpenXR index 14
                         
-                        # # Apply correction to the DexPilot output
-                        # dexpilot_output = self.left_thumb_corrector.apply_correction(
-                        #     dexpilot_output, thumb_tip_pos, index_tip_pos, middle_tip_pos
-                        # )
-                        #------------------------------------------------
+                        dexpilot_output = self.hand_retargeting.left_retargeting.retarget(ref_left_value)
                         # Map from URDF order to Hardware API order
                         # DexPilot returns the full 7-joint array with fixed joints already set
                         # We just need to map from URDF order to Hardware API order
                         left_q_target = np.zeros(Dex3_Num_Motors)
-                        # --------Another potential issue area --------
                         # URDF to Hardware mapping:
                         # URDF[0] left_hand_index_0_joint -> Hardware[5]
                         # URDF[1] left_hand_index_1_joint -> Hardware[6] (fixed)
@@ -318,10 +302,8 @@ class Dex3_1_Controller:
                         # URDF[5] left_hand_thumb_1_joint -> Hardware[1]
                         # URDF[6] left_hand_thumb_2_joint -> Hardware[2] (fixed)
                         urdf_to_hardware = [5, 6, 3, 4, 0, 1, 2]
-                        # ------------------------------------
                         for urdf_idx, hw_idx in enumerate(urdf_to_hardware):
                             left_q_target[hw_idx] = dexpilot_output[urdf_idx]
-                        left_q_target[0] = left_q_target[0]
                     else:
                         # Fallback for unknown retargeting types
                         print(f"Warning: Unknown left retargeting type {left_retargeting_type}, using zero positions")
