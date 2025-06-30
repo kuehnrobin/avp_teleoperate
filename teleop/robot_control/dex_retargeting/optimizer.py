@@ -685,7 +685,7 @@ class DexPilotOptimizer(Optimizer):
         projected_dist = np.array([eta1] * (num_fingers - 1) + [eta2] * ((num_fingers - 1) * (num_fingers - 2) // 2))
         return projected, s2_project_index_origin, s2_project_index_task, projected_dist
     def get_objective_function(self, target_vector: np.ndarray, fixed_qpos: np.ndarray, last_qpos: np.ndarray):
-        debug_mode = True  # Enable debug for DYNAMIC EARTH CORE MISSION! 🌍🔄
+        debug_mode = True  # Enable debug for RELAXED THUMB MISSION! 🌿
         if debug_mode:
             print(f"[DEBUG] DexPilot get_objective_function called")
             print(f"[DEBUG] target_vector shape: {target_vector.shape}")
@@ -806,7 +806,7 @@ class DexPilotOptimizer(Optimizer):
                         middle_tip_idx = i
                 
                 if debug_mode:
-                    print(f"[DEBUG] Found link indices - thumb: {thumb_tip_idx}, index: {index_tip_idx}, middle: {middle_tip_idx}")
+                    print(f"[DEBUG] Found link indices - thumb: {thumb_tip_idx}, index: {index_tip_idx}, middle: {middle_tip_idx} (middle controlled by human pinky)")
                 
                 # Skip penalties if we can't find the required links
                 if thumb_tip_idx is None or index_tip_idx is None or middle_tip_idx is None:
@@ -850,11 +850,11 @@ class DexPilotOptimizer(Optimizer):
                 if thumb_index_diff.item() < -0.02:  # If thumb is more than 2 cm below index finger
                     penalty_val = 300 * (thumb_index_diff + 0.02)**2  # Increased from 100 to 300
                     thumb_penalty += penalty_val.detach().item() if hasattr(penalty_val, 'detach') else penalty_val
-                if thumb_middle_diff.item() < -0.02:  # If thumb is more than 2 cm below middle finger
+                if thumb_middle_diff.item() < -0.02:  # If thumb is more than 2 cm below middle finger (controlled by human pinky)
                     penalty_val = 300 * (thumb_middle_diff + 0.02)**2  # Increased from 100 to 300
                     thumb_penalty += penalty_val.detach().item() if hasattr(penalty_val, 'detach') else penalty_val
 
-                # Add penalty for thumb_0 joint angle deviating from optimal range
+                # Add penalty for thumb_0 joint angle - simple push toward negative values
                 thumb_0_idx = None
                 for i, joint_name in enumerate(self.target_joint_names):
                     if "thumb_0_joint" in joint_name:
@@ -865,65 +865,28 @@ class DexPilotOptimizer(Optimizer):
                 if thumb_0_idx is not None:
                     thumb_0_angle = x[thumb_0_idx]
                     
-                    # DYNAMIC EARTH CORE MISSION: Adaptive thumb behavior! 🌍🔄
-                    # Check if pinching is happening by looking at target distances
-                    thumb_index_target_dist = torch.norm(torch_target_vec[0, :]) if len(torch_target_vec) > 0 else float('inf')
-                    thumb_middle_target_dist = torch.norm(torch_target_vec[1, :]) if len(torch_target_vec) > 1 else float('inf')
-                    
-                    # Detect if user is trying to pinch (target distance < 5cm)
-                    is_pinching = thumb_index_target_dist < 0.05 or thumb_middle_target_dist < 0.05
-                    
-                    if is_pinching:
-                        # PINCHING MODE: Target -60° for optimal thumb-to-index opposition!
-                        # Target -60° specifically for better pinching geometry
-                        optimal_target = np.deg2rad(-60.0)  # TARGET -60° for pinching! 🤏
-                        hard_min = np.deg2rad(-60.0)        # Joint limit: -60°
-                        hard_max = np.deg2rad(60.0)         # Joint limit: +60°
-                        
-                        # GENTLE penalties when pinching - target -60° specifically!
-                        if thumb_0_angle < hard_min:
-                            penalty_val = 50 * (thumb_0_angle - hard_min)**2  # Gentle boundary
-                            thumb_angle_penalty += penalty_val
-                            if debug_mode:
-                                print(f"[EARTH-PINCH] 🌍🤏 Gentle penalty at -60° limit: {penalty_val:.6f}")
-                        elif thumb_0_angle > hard_max:
-                            penalty_val = 50 * (thumb_0_angle - hard_max)**2  # Gentle boundary
-                            thumb_angle_penalty += penalty_val
-                            if debug_mode:
-                                print(f"[EARTH-PINCH] 🌍🤏 Gentle penalty at +60° limit: {penalty_val:.6f}")
-                        else:
-                            # STRONG bias toward -60° when pinching for optimal geometry!
-                            bias_penalty = 200 * (thumb_0_angle - optimal_target)**2  # Strong bias toward -60°!
-                            thumb_angle_penalty += bias_penalty
-                            if debug_mode:
-                                print(f"[EARTH-PINCH] 🌍🤏 TARGETING -60° for pinching! Bias: {bias_penalty:.6f}")
+                    # RELAXED NEGATIVE BIAS: Simple push toward negative values
+                    # No specific target, just encourage negative rotation
+                    if thumb_0_angle > 0:
+                        # Much stronger penalty for positive angles - encourage negative values
+                        penalty_val = 500 * thumb_0_angle**2  # Increased from 150 to 500 for stronger negative bias
+                        thumb_angle_penalty += penalty_val
+                        if debug_mode:
+                            print(f"[RELAX] 🌿 STRONG push toward negative: {penalty_val:.6f}")
                     else:
-                        # NON-PINCHING MODE: Strong bias toward -45° (Earth Core default)
-                        optimal_target = np.deg2rad(-45.0)  # TARGET: -45° (EARTH CORE!)
-                        hard_min = np.deg2rad(-60.0)        # Hard limit: -60°
-                        hard_max = np.deg2rad(-30.0)        # Hard limit: -30°
-                        
-                        # NUCLEAR penalties when NOT pinching - keep thumb at -45°
-                        if thumb_0_angle > hard_max:
-                            penalty_val = 5000 * (thumb_0_angle - hard_max)**2  # NUCLEAR penalty!
+                        # Very gentle bias to keep it reasonably negative (not extreme)
+                        if thumb_0_angle < np.deg2rad(-50.0):  # Below -50°, gentle push back
+                            penalty_val = 15 * (thumb_0_angle + np.deg2rad(50.0))**2  # Keep gentle boundary
                             thumb_angle_penalty += penalty_val
                             if debug_mode:
-                                print(f"[EARTH] 🌍⛏️ Thumb above -30°! NUCLEAR penalty: {penalty_val:.6f}")
-                        elif thumb_0_angle < hard_min:
-                            penalty_val = 1500 * (thumb_0_angle - hard_min)**2  # Strong boundary
-                            thumb_angle_penalty += penalty_val
-                            if debug_mode:
-                                print(f"[EARTH] Thumb below -60°! Strong penalty: {penalty_val:.6f}")
+                                print(f"[RELAX] 🌿 Very gentle boundary at -50°: {penalty_val:.6f}")
                         else:
-                            # NUCLEAR bias toward -45° when not pinching
-                            bias_penalty = 1000 * (thumb_0_angle - optimal_target)**2  # NUCLEAR!
-                            thumb_angle_penalty += bias_penalty
                             if debug_mode:
-                                print(f"[EARTH] 🌍⛏️ DRILLING toward -45°! Nuclear bias: {bias_penalty:.6f}")
+                                print(f"[RELAX] 🌿 Free movement in negative range!")
                     
                     if debug_mode:
                         print(f"[DEBUG] thumb_0_angle: {thumb_0_angle:.5f} rad ({np.rad2deg(thumb_0_angle):.2f}°)")
-                        print(f"[DEBUG] is_pinching: {is_pinching}, thumb_index_dist: {thumb_index_target_dist:.4f}, thumb_middle_dist: {thumb_middle_target_dist:.4f}")
+                        print(f"[DEBUG] thumb_angle_penalty: {thumb_angle_penalty:.6f}")
 
                 # Add penalty for gaps between thumb and primary fingers during pinching
                 thumb_index_target_dist = torch.norm(torch_target_vec[0, :]) if len(torch_target_vec) > 0 else float('inf')
@@ -936,7 +899,7 @@ class DexPilotOptimizer(Optimizer):
                         gap_penalty_val = 200 * (thumb_index_actual_dist - 0.03)**2
                         gap_penalty += gap_penalty_val.detach().item() if hasattr(gap_penalty_val, 'detach') else gap_penalty_val.item()
 
-                if thumb_middle_target_dist < 0.03:  # If target distance is less than 3 cm (pinching)
+                if thumb_middle_target_dist < 0.03:  # If target distance is less than 3 cm (pinching with pinky-controlled middle finger)
                     thumb_middle_actual_dist = torch.norm(thumb_pos - middle_pos)
                     if thumb_middle_actual_dist > 0.03:
                         gap_penalty_val = 200 * (thumb_middle_actual_dist - 0.03)**2
@@ -1003,41 +966,21 @@ class DexPilotOptimizer(Optimizer):
                     
                     # Add the joint angle penalty gradient and regularization
                     if thumb_0_idx is not None:
-                        # DYNAMIC EARTH CORE GRADIENT: Adaptive based on pinching state 🌍🔄
-                        thumb_index_target_dist = torch.norm(torch_target_vec[0, :]) if len(torch_target_vec) > 0 else float('inf')
-                        thumb_middle_target_dist = torch.norm(torch_target_vec[1, :]) if len(torch_target_vec) > 1 else float('inf')
-                        is_pinching = thumb_index_target_dist < 0.05 or thumb_middle_target_dist < 0.05
-                        
-                        if is_pinching:
-                            # PINCHING GRADIENTS: Strong bias toward -60° for optimal pinching!
-                            optimal_target = np.deg2rad(-60.0)  # TARGET -60° for pinching! 🤏
-                            hard_min = np.deg2rad(-60.0)        # Joint limit: -60°
-                            hard_max = np.deg2rad(60.0)         # Joint limit: +60°
-                            
-                            if thumb_0_angle < hard_min:
-                                # Gentle gradient at joint boundary
-                                grad_qpos[thumb_0_idx] += 100 * (thumb_0_angle - hard_min)  # Gentle boundary push
-                            elif thumb_0_angle > hard_max:
-                                # Gentle gradient at joint boundary
-                                grad_qpos[thumb_0_idx] += 100 * (thumb_0_angle - hard_max)  # Gentle boundary push
-                            else:
-                                # STRONG bias toward -60° when pinching for optimal geometry!
-                                grad_qpos[thumb_0_idx] += 400 * (thumb_0_angle - optimal_target)  # STRONG bias toward -60°!
+                        # RELAXED GRADIENT: Simple bias toward negative values
+                        if thumb_0_angle > 0:
+                            # Stronger gradient to push toward negative values (proportional to penalty)
+                            grad_qpos[thumb_0_idx] += 300 * thumb_0_angle  # Increased from 100 to 300 for stronger push
+                            if debug_mode:
+                                print(f"[RELAX] 🌿 Strong gradient toward negative: {300 * thumb_0_angle:.6f}")
                         else:
-                            # NON-PINCHING GRADIENTS: Nuclear bias toward -45°
-                            optimal_target = np.deg2rad(-45.0)  # Target: -45° (EARTH CORE!)
-                            hard_min = np.deg2rad(-60.0)        # Hard limit: -60°
-                            hard_max = np.deg2rad(-30.0)        # Hard limit: -30°
-                            
-                            if thumb_0_angle > hard_max:
-                                # NUCLEAR gradient pushes thumb away from being above -30°
-                                grad_qpos[thumb_0_idx] += 10000 * (thumb_0_angle - hard_max)  # NUCLEAR push toward -30°!
-                            elif thumb_0_angle < hard_min:
-                                # Strong gradient pushes thumb away from hard minimum
-                                grad_qpos[thumb_0_idx] += 3000 * (thumb_0_angle - hard_min)  # Strong push away from -60°
+                            # Very gentle gradient to keep it reasonably negative
+                            if thumb_0_angle < np.deg2rad(-50.0):
+                                grad_qpos[thumb_0_idx] += 20 * (thumb_0_angle + np.deg2rad(50.0))  # Gentle boundary
+                                if debug_mode:
+                                    print(f"[RELAX] 🌿 Gentle boundary gradient: {20 * (thumb_0_angle + np.deg2rad(50.0)):.6f}")
                             else:
-                                # NUCLEAR gradient biases thumb toward optimal target (-45°)
-                                grad_qpos[thumb_0_idx] += 2000 * (thumb_0_angle - optimal_target)  # NUCLEAR bias toward -45°!
+                                if debug_mode:
+                                    print(f"[RELAX] 🌿 No gradient - free negative movement!")
                     
                     grad_qpos += 2 * self.gamma * x  # Add regularization
                     
