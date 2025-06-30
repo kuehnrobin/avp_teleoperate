@@ -244,7 +244,7 @@ class Dex3_1_Controller:
                     # Process left hand
                     left_indices = self.hand_retargeting.left_retargeting.optimizer.target_link_human_indices
 
-                    if left_retargeting_type ==  "POSITION": # Ist das Ein bug? Ist das Absicht mit Position?? 
+                    if left_retargeting_type ==  "VECTOR": # Ist das Ein bug? Ist das Absicht mit Position?? 
                         # Vector method: use absolute fingertip positions
                         ref_left_value = left_hand_mat[unitree_tip_indices]
                         # -------- Tune for Vector Retargeting Method --------
@@ -311,7 +311,7 @@ class Dex3_1_Controller:
                     
                     # Process right hand
                     right_indices = self.hand_retargeting.right_retargeting.optimizer.target_link_human_indices
-                    if right_retargeting_type == "POSITION":
+                    if right_retargeting_type == "VECTOR":
                         # Vector method: use absolute fingertip positions (original simple method)
                         ref_right_value = right_hand_mat[unitree_tip_indices]
                         ref_right_value[0] = ref_right_value[0] * 1.15
