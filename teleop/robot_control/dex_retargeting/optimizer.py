@@ -685,7 +685,7 @@ class DexPilotOptimizer(Optimizer):
         projected_dist = np.array([eta1] * (num_fingers - 1) + [eta2] * ((num_fingers - 1) * (num_fingers - 2) // 2))
         return projected, s2_project_index_origin, s2_project_index_task, projected_dist
     def get_objective_function(self, target_vector: np.ndarray, fixed_qpos: np.ndarray, last_qpos: np.ndarray):
-        debug_mode = True  # Enable debug for MOON MISSION! 🚀
+        debug_mode = True  # Enable debug for MARS MISSION! 🔴🚀
         if debug_mode:
             print(f"[DEBUG] DexPilot get_objective_function called")
             print(f"[DEBUG] target_vector shape: {target_vector.shape}")
@@ -865,10 +865,10 @@ class DexPilotOptimizer(Optimizer):
                 if thumb_0_idx is not None:
                     thumb_0_angle = x[thumb_0_idx]
                     
-                    # LUNAR MISSION: Send thumb_0_joint to the moon! 🚀
-                    # Target VERY positive angles to see maximum movement
-                    optimal_target = np.deg2rad(45.0)  # TARGET: +45° (MOON MISSION!)
-                    hard_min = np.deg2rad(30.0)        # Hard limit: +30° (force positive!)
+                    # MARS MISSION: Launch thumb_0_joint to Mars! 🔴🚀
+                    # Target EXTREME positive angles for maximum thumb-to-index opposition
+                    optimal_target = np.deg2rad(55.0)  # TARGET: +55° (MARS MISSION!)
+                    hard_min = np.deg2rad(40.0)        # Hard limit: +40° (force extreme positive!)
                     hard_max = np.deg2rad(60.0)        # Upper limit: +60° (maximum joint range)
                     
                     if debug_mode:
@@ -877,24 +877,24 @@ class DexPilotOptimizer(Optimizer):
                         print(f"[DEBUG] hard_min: {hard_min:.5f} rad ({np.rad2deg(hard_min):.2f}°)")
                         print(f"[DEBUG] hard_max: {hard_max:.5f} rad ({np.rad2deg(hard_max):.2f}°)")
                     
-                    # MOON MISSION PENALTIES: Force thumb to extreme positive values
+                    # MARS MISSION PENALTIES: Force thumb to EXTREME positive values
                     if thumb_0_angle < hard_min:
-                        # MASSIVE penalty for being below +30° - force thumb to positive values!
-                        penalty_val = 2000 * (thumb_0_angle - hard_min)**2  # MASSIVE penalty!
+                        # NUCLEAR penalty for being below +40° - FORCE thumb to extreme positive values!
+                        penalty_val = 5000 * (thumb_0_angle - hard_min)**2  # NUCLEAR penalty!
                         thumb_angle_penalty += penalty_val
                         if debug_mode:
-                            print(f"[MOON] 🚀 Thumb below +30°! MASSIVE penalty: {penalty_val:.6f}")
+                            print(f"[MARS] 🔴🚀 Thumb below +40°! NUCLEAR penalty: {penalty_val:.6f}")
                     elif thumb_0_angle > hard_max:
-                        penalty_val = 1000 * (thumb_0_angle - hard_max)**2  # Strong penalty for exceeding limits
+                        penalty_val = 1500 * (thumb_0_angle - hard_max)**2  # Stronger penalty for exceeding limits
                         thumb_angle_penalty += penalty_val
                         if debug_mode:
-                            print(f"[MOON] Thumb above +60°! Strong penalty: {penalty_val:.6f}")
+                            print(f"[MARS] Thumb above +60°! Strong penalty: {penalty_val:.6f}")
                     else:
-                        # EXTREME bias toward +45° for LUNAR ORBIT!
-                        bias_penalty = 500 * (thumb_0_angle - optimal_target)**2  # EXTREME push toward +45°!
+                        # NUCLEAR bias toward +55° for MARS ORBIT!
+                        bias_penalty = 1000 * (thumb_0_angle - optimal_target)**2  # NUCLEAR push toward +55°!
                         thumb_angle_penalty += bias_penalty
                         if debug_mode:
-                            print(f"[MOON] 🚀 LAUNCHING thumb toward +45°! Bias penalty: {bias_penalty:.6f}")
+                            print(f"[MARS] 🔴🚀 LAUNCHING thumb toward +55°! Bias penalty: {bias_penalty:.6f}")
 
                 # Add penalty for gaps between thumb and primary fingers during pinching
                 thumb_index_target_dist = torch.norm(torch_target_vec[0, :]) if len(torch_target_vec) > 0 else float('inf')
@@ -974,20 +974,20 @@ class DexPilotOptimizer(Optimizer):
                     
                     # Add the joint angle penalty gradient and regularization
                     if thumb_0_idx is not None:
-                        # MOON MISSION GRADIENT: Match the updated penalty logic with extreme bias toward positive angles
-                        optimal_target = np.deg2rad(45.0)  # Target: +45° (MOON!)
-                        hard_min = np.deg2rad(30.0)        # Hard limit: +30°
+                        # MARS MISSION GRADIENT: Match the updated penalty logic with extreme bias toward positive angles
+                        optimal_target = np.deg2rad(55.0)  # Target: +55° (MARS!)
+                        hard_min = np.deg2rad(40.0)        # Hard limit: +40°
                         hard_max = np.deg2rad(60.0)        # Hard limit: +60°
                         
                         if thumb_0_angle < hard_min:
-                            # MASSIVE gradient pushes thumb away from being below +30°
-                            grad_qpos[thumb_0_idx] += 4000 * (thumb_0_angle - hard_min)  # MASSIVE push toward +30°!
+                            # NUCLEAR gradient pushes thumb away from being below +40°
+                            grad_qpos[thumb_0_idx] += 10000 * (thumb_0_angle - hard_min)  # NUCLEAR push toward +40°!
                         elif thumb_0_angle > hard_max:
-                            # Strong gradient pushes thumb away from hard maximum
-                            grad_qpos[thumb_0_idx] += 2000 * (thumb_0_angle - hard_max)  # Strong push away from +60°
+                            # Stronger gradient pushes thumb away from hard maximum
+                            grad_qpos[thumb_0_idx] += 3000 * (thumb_0_angle - hard_max)  # Stronger push away from +60°
                         else:
-                            # EXTREME gradient biases thumb toward optimal target (+45°)
-                            grad_qpos[thumb_0_idx] += 1000 * (thumb_0_angle - optimal_target)  # EXTREME bias toward +45°!
+                            # NUCLEAR gradient biases thumb toward optimal target (+55°)
+                            grad_qpos[thumb_0_idx] += 2000 * (thumb_0_angle - optimal_target)  # NUCLEAR bias toward +55°!
                     
                     grad_qpos += 2 * self.gamma * x  # Add regularization
                     
