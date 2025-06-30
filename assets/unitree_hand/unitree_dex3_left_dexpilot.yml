@@ -20,8 +20,7 @@ retargeting:
   # DexPilot retargeting link names
   finger_tip_link_names: ["left_hand_thumb_2_link", "left_hand_middle_1_link", "left_hand_index_1_link"] # thumb, middle, index
   
-  target_link_human_indices: [[0, 0, 0], [4, 9, 14]]
-  # Optimization parameters
+  # Optimization parameters # Change??? 
   normal_delta:  4e-3
   huber_delta: 2e-2
 

@@ -274,12 +274,12 @@ class Dex3_1_Controller:
                         # This means DexPilot expects data at indices: 0, 4, 8, 12
                         # Potential Issue area -------------------
                         # Archive
-                        # joint_pos = np.zeros((25, 3))
-                        # joint_pos[0] = left_hand_mat[0]   # wrist -> index 0
-                        # joint_pos[4] = left_hand_mat[4]   # thumb_tip -> index 4
-                        # joint_pos[8] = left_hand_mat[9]   # index_tip -> index 8 (OpenXR index 9)
-                        # joint_pos[12] = left_hand_mat[14] # middle_tip -> index 12 (OpenXR index 14)
-                        joint_pos = left_hand_mat.copy()  # Use the full OpenXR data directly
+                        joint_pos = np.zeros((25, 3))
+                        joint_pos[0] = left_hand_mat[0]   # wrist -> index 0
+                        joint_pos[4] = left_hand_mat[4]   # thumb_tip -> index 4
+                        joint_pos[8] = left_hand_mat[9]   # index_tip -> index 8 (OpenXR index 9)
+                        joint_pos[12] = left_hand_mat[14] # middle_tip -> index 12 (OpenXR index 14)
+                        #joint_pos = left_hand_mat.copy()  # Use the full OpenXR data directly
                         # Calculate vectors using the indices DexPilot specifies (same as show_realtime_retargeting.py)
                         ref_left_value = joint_pos[task_indices, :] - joint_pos[origin_indices, :]
                         # ------------------------------------
@@ -307,8 +307,7 @@ class Dex3_1_Controller:
                         # Map from URDF order to Hardware API order
                         # DexPilot returns the full 7-joint array with fixed joints already set
                         # We just need to map from URDF order to Hardware API order
-                        # Potential Issue area -------------------
-                        #left_q_target = np.zeros(Dex3_Num_Motors)
+                        left_q_target = np.zeros(Dex3_Num_Motors)
                         # --------Another potential issue area --------
                         # URDF to Hardware mapping:
                         # URDF[0] left_hand_index_0_joint -> Hardware[5]
@@ -318,11 +317,11 @@ class Dex3_1_Controller:
                         # URDF[4] left_hand_thumb_0_joint -> Hardware[0]
                         # URDF[5] left_hand_thumb_1_joint -> Hardware[1]
                         # URDF[6] left_hand_thumb_2_joint -> Hardware[2] (fixed)
-                        # urdf_to_hardware = [5, 6, 3, 4, 0, 1, 2]
-                        # # ------------------------------------
-                        # for urdf_idx, hw_idx in enumerate(urdf_to_hardware):
-                        #     left_q_target[hw_idx] = dexpilot_output[urdf_idx]
-                        # -----------------------
+                        urdf_to_hardware = [5, 6, 3, 4, 0, 1, 2]
+                        # ------------------------------------
+                        for urdf_idx, hw_idx in enumerate(urdf_to_hardware):
+                            left_q_target[hw_idx] = dexpilot_output[urdf_idx]
+                        left_q_target[0] = left_q_target[0]
                     else:
                         # Fallback for unknown retargeting types
                         print(f"Warning: Unknown left retargeting type {left_retargeting_type}, using zero positions")
