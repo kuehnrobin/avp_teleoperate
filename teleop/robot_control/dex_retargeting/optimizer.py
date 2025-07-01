@@ -800,18 +800,19 @@ class DexPilotOptimizer(Optimizer):
                 # Dynamic target angle selection based on pinching state
                 if is_thumb_index_pinching:
                     # Thumb-index pinching: aggressive negative angle for precision grip
-                    target_angle = np.deg2rad(-130.0)  # Target the maximum negative angle
+                    target_angle = np.deg2rad(-140.0)  # Target the maximum negative angle
                     bias_strength = 500  # Very strong bias for pinching
                     pinch_type = "thumb-index"
                 elif is_thumb_middle_pinching:
                     # Thumb-middle pinching: moderate negative angle for power grip  
-                    target_angle = np.deg2rad(-5.0)  # Slightly negative from zero position
+                    target_angle = np.deg2rad(0.0)  # Slightly negative from zero position
                     bias_strength = 300  # Strong bias for pinching
                     pinch_type = "thumb-middle"
                 else:
                     # No pinching: natural hand position (middle between index and middle)
+                    # TODO: Was passiert wenn wir die hier rausnehmen??
                     target_angle = np.deg2rad(-60.0)  # Middle position in new coordinate system
-                    bias_strength = 100  # Gentle bias
+                    bias_strength = 50 #100  # Gentle bias
                     pinch_type = "open"
                 
                 # Add penalty for thumb_0 joint angle - DYNAMIC PINCHING SYSTEM
