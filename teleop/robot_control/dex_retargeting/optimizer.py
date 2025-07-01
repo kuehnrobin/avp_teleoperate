@@ -800,12 +800,12 @@ class DexPilotOptimizer(Optimizer):
                 # Dynamic target angle selection based on pinching state
                 if is_thumb_index_pinching:
                     # Thumb-index pinching: aggressive negative angle for precision grip
-                    target_angle = np.deg2rad(-120.0)  # Target the maximum negative angle
+                    target_angle = np.deg2rad(-130.0)  # Target the maximum negative angle
                     bias_strength = 500  # Very strong bias for pinching
                     pinch_type = "thumb-index"
                 elif is_thumb_middle_pinching:
                     # Thumb-middle pinching: moderate negative angle for power grip  
-                    target_angle = np.deg2rad(0.0)  # Slightly negative from zero position
+                    target_angle = np.deg2rad(-5.0)  # Slightly negative from zero position
                     bias_strength = 300  # Strong bias for pinching
                     pinch_type = "thumb-middle"
                 else:
@@ -829,7 +829,7 @@ class DexPilotOptimizer(Optimizer):
                     penalty_val = bias_strength * (thumb_0_angle - target_angle)**2
                     thumb_angle_penalty += penalty_val
 
-                # OPEN HAND BIAS: Push thumb_1_joint, index_0_joint, and middle_0_joint towards 0° when no pinching
+                # OPEN HAND BIAS: Push thumb_1_joint, thumb_2_joint, index_0_joint, and middle_0_joint towards 0° when no pinching
                 open_hand_bias_penalty = 0.0
                 if pinch_type == "open":  # Only apply when no pinching is detected
                     open_hand_bias_strength = 0.5  # Gentle bias towards open hand position
@@ -838,6 +838,7 @@ class DexPilotOptimizer(Optimizer):
                     # Find joint indices and apply penalties
                     for i, joint_name in enumerate(self.target_joint_names):
                         if ("thumb_1_joint" in joint_name or 
+                            "thumb_2_joint" in joint_name or
                             "index_0_joint" in joint_name or 
                             "middle_0_joint" in joint_name):
                             joint_angle = x[i]
@@ -933,6 +934,7 @@ class DexPilotOptimizer(Optimizer):
                         
                         for i, joint_name in enumerate(self.target_joint_names):
                             if ("thumb_1_joint" in joint_name or 
+                                "thumb_2_joint" in joint_name or
                                 "index_0_joint" in joint_name or 
                                 "middle_0_joint" in joint_name):
                                 joint_angle = x[i]
