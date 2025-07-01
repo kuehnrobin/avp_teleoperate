@@ -831,6 +831,21 @@ class DexPilotOptimizer(Optimizer):
                     penalty_val = bias_strength * (thumb_0_angle - target_angle)**2
                     thumb_angle_penalty += penalty_val
 
+                # OPEN HAND BIAS: Push thumb_1_joint, index_0_joint, and middle_0_joint towards 0° when no pinching
+                open_hand_bias_penalty = 0.0
+                if pinch_type == "open":  # Only apply when no pinching is detected
+                    open_hand_bias_strength = 0.5  # Gentle bias towards open hand position
+                    target_open_angle = 0.0  # Target: 0 degrees
+                    
+                    # Find joint indices and apply penalties
+                    for i, joint_name in enumerate(self.target_joint_names):
+                        if ("thumb_1_joint" in joint_name or 
+                            "index_0_joint" in joint_name or 
+                            "middle_0_joint" in joint_name):
+                            joint_angle = x[i]
+                            penalty_val = open_hand_bias_strength * (joint_angle - target_open_angle)**2
+                            open_hand_bias_penalty += penalty_val
+
                 # COMMENTED OUT: Gap penalty for gaps between thumb and primary fingers during pinching
                 # thumb_index_target_dist = torch.norm(torch_target_vec[0, :]) if len(torch_target_vec) > 0 else float('inf')
                 # thumb_middle_target_dist = torch.norm(torch_target_vec[1, :]) if len(torch_target_vec) > 1 else float('inf')
@@ -849,7 +864,7 @@ class DexPilotOptimizer(Optimizer):
                 #         gap_penalty_val = 200 * (thumb_middle_actual_dist - 0.03)**2
                 #         gap_penalty += gap_penalty_val.detach().item() if hasattr(gap_penalty_val, 'detach') else gap_penalty_val.item()
 
-                result = huber_distance.cpu().detach().item() + thumb_penalty + thumb_angle_penalty + gap_penalty
+                result = huber_distance.cpu().detach().item() + thumb_penalty + thumb_angle_penalty + open_hand_bias_penalty + gap_penalty
                 
                 if np.isnan(result) or np.isinf(result):
                     return float('inf')
@@ -912,6 +927,19 @@ class DexPilotOptimizer(Optimizer):
                         # Apply gradient toward the dynamic target angle
                         gradient_val = 2 * bias_strength * (thumb_0_angle - target_angle)
                         grad_qpos[thumb_0_idx] += gradient_val
+                    
+                    # Add open hand bias gradients when no pinching is detected
+                    if pinch_type == "open":
+                        open_hand_bias_strength = 0.5  # Same value as in penalty calculation
+                        target_open_angle = 0.0
+                        
+                        for i, joint_name in enumerate(self.target_joint_names):
+                            if ("thumb_1_joint" in joint_name or 
+                                "index_0_joint" in joint_name or 
+                                "middle_0_joint" in joint_name):
+                                joint_angle = x[i]
+                                gradient_val = 2 * open_hand_bias_strength * (joint_angle - target_open_angle)
+                                grad_qpos[i] += gradient_val
                     
                     grad_qpos += 2 * self.gamma * x  # Add regularization
                     
