@@ -490,6 +490,8 @@ class DexPilotOptimizerAnyTeleop(Optimizer):
             # Different from the original DexPilot, we use huber loss here instead of the squared dist
             vec_dist = torch.norm(robot_vec - torch_target_vec, dim=1, keepdim=False)
             huber_distance = self.huber_loss(vec_dist, torch.zeros_like(vec_dist))
+            # Properly aggregate the huber loss to get a scalar
+            huber_distance = huber_distance.sum()
             result = huber_distance.cpu().detach().item()
 
             if grad.size > 0:
@@ -805,7 +807,7 @@ class DexPilotOptimizer(Optimizer):
                     pinch_type = "thumb-index"
                 elif is_thumb_middle_pinching:
                     # Thumb-middle pinching: moderate negative angle for power grip  
-                    target_angle = np.deg2rad(0.0)  # Slightly negative from zero position
+                    target_angle = np.deg2rad(-3.0)  # Slightly negative from zero position
                     bias_strength = 300  # Strong bias for pinching
                     pinch_type = "thumb-middle"
                 else:
