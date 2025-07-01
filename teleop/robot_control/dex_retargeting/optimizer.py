@@ -921,12 +921,13 @@ class DexPilotOptimizer(Optimizer):
                 thumb_middle_diff = thumb_pos[2] - middle_pos[2]
 
                 thumb_penalty = 0.0
-                if thumb_index_diff.item() < -0.02:  # If thumb is more than 2 cm below index finger
-                    penalty_val = 300 * (thumb_index_diff + 0.02)**2  # Increased from 100 to 300
-                    thumb_penalty += penalty_val.detach().item() if hasattr(penalty_val, 'detach') else penalty_val
-                if thumb_middle_diff.item() < -0.02:  # If thumb is more than 2 cm below middle finger
-                    penalty_val = 300 * (thumb_middle_diff + 0.02)**2  # Increased from 100 to 300
-                    thumb_penalty += penalty_val.detach().item() if hasattr(penalty_val, 'detach') else penalty_val
+                # COMMENTED OUT: Thumb position penalty (prevents thumb from dropping below other fingers)
+                # if thumb_index_diff.item() < -0.02:  # If thumb is more than 2 cm below index finger
+                #     penalty_val = 300 * (thumb_index_diff + 0.02)**2  # Increased from 100 to 300
+                #     thumb_penalty += penalty_val.detach().item() if hasattr(penalty_val, 'detach') else penalty_val
+                # if thumb_middle_diff.item() < -0.02:  # If thumb is more than 2 cm below middle finger
+                #     penalty_val = 300 * (thumb_middle_diff + 0.02)**2  # Increased from 100 to 300
+                #     thumb_penalty += penalty_val.detach().item() if hasattr(penalty_val, 'detach') else penalty_val
 
                 # DYNAMIC PINCHING DETECTION SYSTEM 🎯
                 # Detect pinching gestures from OpenXR data and adjust thumb_0_joint target angles aggressively
@@ -980,22 +981,23 @@ class DexPilotOptimizer(Optimizer):
                         print(f"[DEBUG] thumb_0_angle: {thumb_0_angle:.5f} rad ({np.rad2deg(thumb_0_angle):.2f}°)")
                         print(f"[DEBUG] thumb_angle_penalty: {thumb_angle_penalty:.6f}")
 
-                # Add penalty for gaps between thumb and primary fingers during pinching
-                thumb_index_target_dist = torch.norm(torch_target_vec[0, :]) if len(torch_target_vec) > 0 else float('inf')
-                thumb_middle_target_dist = torch.norm(torch_target_vec[1, :]) if len(torch_target_vec) > 1 else float('inf')
+                # COMMENTED OUT: Gap penalty for gaps between thumb and primary fingers during pinching
+                # thumb_index_target_dist = torch.norm(torch_target_vec[0, :]) if len(torch_target_vec) > 0 else float('inf')
+                # thumb_middle_target_dist = torch.norm(torch_target_vec[1, :]) if len(torch_target_vec) > 1 else float('inf')
 
                 gap_penalty = 0.0
-                if thumb_index_target_dist < 0.03:  # If target distance is less than 3 cm (pinching)
-                    thumb_index_actual_dist = torch.norm(thumb_pos - index_pos)
-                    if thumb_index_actual_dist > 0.03:
-                        gap_penalty_val = 200 * (thumb_index_actual_dist - 0.03)**2
-                        gap_penalty += gap_penalty_val.detach().item() if hasattr(gap_penalty_val, 'detach') else gap_penalty_val.item()
+                # COMMENTED OUT: Gap penalty calculations
+                # if thumb_index_target_dist < 0.03:  # If target distance is less than 3 cm (pinching)
+                #     thumb_index_actual_dist = torch.norm(thumb_pos - index_pos)
+                #     if thumb_index_actual_dist > 0.03:
+                #         gap_penalty_val = 200 * (thumb_index_actual_dist - 0.03)**2
+                #         gap_penalty += gap_penalty_val.detach().item() if hasattr(gap_penalty_val, 'detach') else gap_penalty_val.item()
 
-                if thumb_middle_target_dist < 0.03:  # If target distance is less than 3 cm (pinching)
-                    thumb_middle_actual_dist = torch.norm(thumb_pos - middle_pos)
-                    if thumb_middle_actual_dist > 0.03:
-                        gap_penalty_val = 200 * (thumb_middle_actual_dist - 0.03)**2
-                        gap_penalty += gap_penalty_val.detach().item() if hasattr(gap_penalty_val, 'detach') else gap_penalty_val.item()
+                # if thumb_middle_target_dist < 0.03:  # If target distance is less than 3 cm (pinching)
+                #     thumb_middle_actual_dist = torch.norm(thumb_pos - middle_pos)
+                #     if thumb_middle_actual_dist > 0.03:
+                #         gap_penalty_val = 200 * (thumb_middle_actual_dist - 0.03)**2
+                #         gap_penalty += gap_penalty_val.detach().item() if hasattr(gap_penalty_val, 'detach') else gap_penalty_val.item()
 
                 result = huber_distance.cpu().detach().item() + thumb_penalty + thumb_angle_penalty + gap_penalty
                 if debug_mode:
@@ -1019,32 +1021,32 @@ class DexPilotOptimizer(Optimizer):
                     huber_distance.backward()
                     grad_pos = torch_body_pos.grad.detach().cpu().numpy()[:, None, :]
 
-                    # Compute gradient of thumb position penalty term
-                    if thumb_index_diff.item() < -0.02:
-                        grad_pos[thumb_tip_idx, 0, 2] += 600 * (thumb_index_diff.detach() + 0.02).item()  # Updated gradient weight
-                        grad_pos[index_tip_idx, 0, 2] -= 600 * (thumb_index_diff.detach() + 0.02).item()
-                    if thumb_middle_diff.item() < -0.02:
-                        grad_pos[thumb_tip_idx, 0, 2] += 600 * (thumb_middle_diff.detach() + 0.02).item()  # Updated gradient weight
-                        grad_pos[middle_tip_idx, 0, 2] -= 600 * (thumb_middle_diff.detach() + 0.02).item()
+                    # COMMENTED OUT: Compute gradient of thumb position penalty term
+                    # if thumb_index_diff.item() < -0.02:
+                    #     grad_pos[thumb_tip_idx, 0, 2] += 600 * (thumb_index_diff.detach() + 0.02).item()  # Updated gradient weight
+                    #     grad_pos[index_tip_idx, 0, 2] -= 600 * (thumb_index_diff.detach() + 0.02).item()
+                    # if thumb_middle_diff.item() < -0.02:
+                    #     grad_pos[thumb_tip_idx, 0, 2] += 600 * (thumb_middle_diff.detach() + 0.02).item()  # Updated gradient weight
+                    #     grad_pos[middle_tip_idx, 0, 2] -= 600 * (thumb_middle_diff.detach() + 0.02).item()
 
-                    # Compute gradient of gap penalty term
-                    thumb_index_actual_dist = torch.norm(thumb_pos - index_pos)
-                    thumb_middle_actual_dist = torch.norm(thumb_pos - middle_pos)
+                    # COMMENTED OUT: Compute gradient of gap penalty term
+                    # thumb_index_actual_dist = torch.norm(thumb_pos - index_pos)
+                    # thumb_middle_actual_dist = torch.norm(thumb_pos - middle_pos)
 
-                    # Pinching gap penalties
-                    if thumb_index_target_dist < 0.03 and thumb_index_actual_dist > 0.03:
-                        direction = (thumb_pos - index_pos).detach().cpu().numpy()
-                        if np.linalg.norm(direction) > 1e-6:
-                            direction = direction / np.linalg.norm(direction)
-                        grad_pos[thumb_tip_idx, 0, :] += 400 * (thumb_index_actual_dist.detach() - 0.03).item() * direction
-                        grad_pos[index_tip_idx, 0, :] -= 400 * (thumb_index_actual_dist.detach() - 0.03).item() * direction
+                    # COMMENTED OUT: Pinching gap penalties gradients
+                    # if thumb_index_target_dist < 0.03 and thumb_index_actual_dist > 0.03:
+                    #     direction = (thumb_pos - index_pos).detach().cpu().numpy()
+                    #     if np.linalg.norm(direction) > 1e-6:
+                    #         direction = direction / np.linalg.norm(direction)
+                    #     grad_pos[thumb_tip_idx, 0, :] += 400 * (thumb_index_actual_dist.detach() - 0.03).item() * direction
+                    #     grad_pos[index_tip_idx, 0, :] -= 400 * (thumb_index_actual_dist.detach() - 0.03).item() * direction
 
-                    if thumb_middle_target_dist < 0.03 and thumb_middle_actual_dist > 0.03:
-                        direction = (thumb_pos - middle_pos).detach().cpu().numpy()
-                        if np.linalg.norm(direction) > 1e-6:
-                            direction = direction / np.linalg.norm(direction)
-                        grad_pos[thumb_tip_idx, 0, :] += 400 * (thumb_middle_actual_dist.detach() - 0.03).item() * direction
-                        grad_pos[middle_tip_idx, 0, :] -= 400 * (thumb_middle_actual_dist.detach() - 0.03).item() * direction
+                    # if thumb_middle_target_dist < 0.03 and thumb_middle_actual_dist > 0.03:
+                    #     direction = (thumb_pos - middle_pos).detach().cpu().numpy()
+                    #     if np.linalg.norm(direction) > 1e-6:
+                    #         direction = direction / np.linalg.norm(direction)
+                    #     grad_pos[thumb_tip_idx, 0, :] += 400 * (thumb_middle_actual_dist.detach() - 0.03).item() * direction
+                    #     grad_pos[middle_tip_idx, 0, :] -= 400 * (thumb_middle_actual_dist.detach() - 0.03).item() * direction
 
                     # Convert the jacobian from pinocchio order to target order
                     if self.adaptor is not None:
