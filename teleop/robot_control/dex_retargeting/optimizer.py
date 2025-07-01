@@ -4,6 +4,7 @@ from typing import List, Optional
 import nlopt
 import numpy as np
 import torch
+import math
 
 from .kinematics_adaptor import KinematicAdaptor, MimicJointKinematicAdaptor
 from .robot_wrapper import RobotWrapper
@@ -524,10 +525,7 @@ class DexPilotOptimizerAnyTeleop(Optimizer):
             # Loss term for kinematics retargeting based on 3D position error
             # Different from the original DexPilot, we use huber loss here instead of the squared dist
             vec_dist = torch.norm(robot_vec - torch_target_vec, dim=1, keepdim=False)
-            huber_distance = (
-                self.huber_loss(vec_dist, torch.zeros_like(vec_dist)) * weight / (robot_vec.shape[0])
-            ).sum()
-            huber_distance = huber_distance.sum()
+            huber_distance = self.huber_loss(vec_dist, torch.zeros_like(vec_dist))
             result = huber_distance.cpu().detach().item()
 
             if grad.size > 0:
@@ -1194,6 +1192,14 @@ class DexPilotOptimizer(Optimizer):
             huber_distance = huber_distance.sum()
             result = huber_distance.cpu().detach().item()
 
+            # Add consistent negative bias for thumb_0_joint to counteract kinematic differences
+            # thumb_0_joint is at index 0 in the joint optimization array
+            thumb_0_angle = x[0]
+            thumb_target_angle = math.radians(-60)  # -45 degrees in radians (very negative)
+            thumb_bias_strength = 100.0     # Penalty weight for thumb bias
+            thumb_penalty = thumb_bias_strength * (thumb_0_angle - thumb_target_angle) ** 2
+            result += thumb_penalty
+
             if grad.size > 0:
                 jacobians = []
                 for i, index in enumerate(self.computed_link_indices):
@@ -1221,6 +1227,10 @@ class DexPilotOptimizer(Optimizer):
                 # which is equivalent to fully opened the hand
                 # In our implementation, we regularize the joint angles to the previous joint angles
                 grad_qpos += 2 * self.norm_delta * (x - last_qpos)
+
+                # Add thumb bias gradient contribution
+                thumb_bias_gradient = 2 * thumb_bias_strength * (thumb_0_angle - thumb_target_angle)
+                grad_qpos[0] += thumb_bias_gradient  # Apply to thumb_0_joint (index 0)
 
                 grad[:] = grad_qpos[:]
 
