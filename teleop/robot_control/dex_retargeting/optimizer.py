@@ -685,7 +685,7 @@ class DexPilotOptimizer(Optimizer):
         projected_dist = np.array([eta1] * (num_fingers - 1) + [eta2] * ((num_fingers - 1) * (num_fingers - 2) // 2))
         return projected, s2_project_index_origin, s2_project_index_task, projected_dist
     def get_objective_function(self, target_vector: np.ndarray, fixed_qpos: np.ndarray, last_qpos: np.ndarray):
-        debug_mode = True  # Enable debug for RELAXED THUMB MISSION! 🌿
+        debug_mode = False  # Disable debug output for cleaner testing
         if debug_mode:
             print(f"[DEBUG] DexPilot get_objective_function called")
             print(f"[DEBUG] target_vector shape: {target_vector.shape}")
@@ -806,7 +806,7 @@ class DexPilotOptimizer(Optimizer):
                         middle_tip_idx = i
                 
                 if debug_mode:
-                    print(f"[DEBUG] Found link indices - thumb: {thumb_tip_idx}, index: {index_tip_idx}, middle: {middle_tip_idx} (middle controlled by human pinky)")
+                    print(f"[DEBUG] Found link indices - thumb: {thumb_tip_idx}, index: {index_tip_idx}, middle: {middle_tip_idx}")
                 
                 # Skip penalties if we can't find the required links
                 if thumb_tip_idx is None or index_tip_idx is None or middle_tip_idx is None:
@@ -850,11 +850,11 @@ class DexPilotOptimizer(Optimizer):
                 if thumb_index_diff.item() < -0.02:  # If thumb is more than 2 cm below index finger
                     penalty_val = 300 * (thumb_index_diff + 0.02)**2  # Increased from 100 to 300
                     thumb_penalty += penalty_val.detach().item() if hasattr(penalty_val, 'detach') else penalty_val
-                if thumb_middle_diff.item() < -0.02:  # If thumb is more than 2 cm below middle finger (controlled by human pinky)
+                if thumb_middle_diff.item() < -0.02:  # If thumb is more than 2 cm below middle finger
                     penalty_val = 300 * (thumb_middle_diff + 0.02)**2  # Increased from 100 to 300
                     thumb_penalty += penalty_val.detach().item() if hasattr(penalty_val, 'detach') else penalty_val
 
-                # Add penalty for thumb_0 joint angle - simple push toward negative values
+                # Add penalty for thumb_0 joint angle - CONSISTENT NEGATIVE BIAS
                 thumb_0_idx = None
                 for i, joint_name in enumerate(self.target_joint_names):
                     if "thumb_0_joint" in joint_name:
@@ -865,24 +865,17 @@ class DexPilotOptimizer(Optimizer):
                 if thumb_0_idx is not None:
                     thumb_0_angle = x[thumb_0_idx]
                     
-                    # RELAXED NEGATIVE BIAS: Simple push toward negative values
-                    # No specific target, just encourage negative rotation
-                    if thumb_0_angle > 0:
-                        # Much stronger penalty for positive angles - encourage negative values
-                        penalty_val = 500 * thumb_0_angle**2  # Increased from 150 to 500 for stronger negative bias
-                        thumb_angle_penalty += penalty_val
-                        if debug_mode:
-                            print(f"[RELAX] 🌿 STRONG push toward negative: {penalty_val:.6f}")
-                    else:
-                        # Very gentle bias to keep it reasonably negative (not extreme)
-                        if thumb_0_angle < np.deg2rad(-50.0):  # Below -50°, gentle push back
-                            penalty_val = 15 * (thumb_0_angle + np.deg2rad(50.0))**2  # Keep gentle boundary
-                            thumb_angle_penalty += penalty_val
-                            if debug_mode:
-                                print(f"[RELAX] 🌿 Very gentle boundary at -50°: {penalty_val:.6f}")
-                        else:
-                            if debug_mode:
-                                print(f"[RELAX] 🌿 Free movement in negative range!")
+                    # CONSISTENT NEGATIVE BIAS: Always gently push toward very negative angles
+                    # This creates a constant bias that counteracts kinematic differences
+                    target_angle = np.deg2rad(-45.0)  # Target: -45° (very negative)
+                    bias_strength = 100  # Gentle but consistent bias
+                    
+                    # Always apply gentle bias toward very negative angles
+                    penalty_val = bias_strength * (thumb_0_angle - target_angle)**2
+                    thumb_angle_penalty += penalty_val
+                    
+                    if debug_mode:
+                        print(f"[CONSISTENT] 🌿 Always pushing toward -45°: current={np.rad2deg(thumb_0_angle):.2f}°, penalty={penalty_val:.6f}")
                     
                     if debug_mode:
                         print(f"[DEBUG] thumb_0_angle: {thumb_0_angle:.5f} rad ({np.rad2deg(thumb_0_angle):.2f}°)")
@@ -899,7 +892,7 @@ class DexPilotOptimizer(Optimizer):
                         gap_penalty_val = 200 * (thumb_index_actual_dist - 0.03)**2
                         gap_penalty += gap_penalty_val.detach().item() if hasattr(gap_penalty_val, 'detach') else gap_penalty_val.item()
 
-                if thumb_middle_target_dist < 0.03:  # If target distance is less than 3 cm (pinching with pinky-controlled middle finger)
+                if thumb_middle_target_dist < 0.03:  # If target distance is less than 3 cm (pinching)
                     thumb_middle_actual_dist = torch.norm(thumb_pos - middle_pos)
                     if thumb_middle_actual_dist > 0.03:
                         gap_penalty_val = 200 * (thumb_middle_actual_dist - 0.03)**2
@@ -966,21 +959,16 @@ class DexPilotOptimizer(Optimizer):
                     
                     # Add the joint angle penalty gradient and regularization
                     if thumb_0_idx is not None:
-                        # RELAXED GRADIENT: Simple bias toward negative values
-                        if thumb_0_angle > 0:
-                            # Stronger gradient to push toward negative values (proportional to penalty)
-                            grad_qpos[thumb_0_idx] += 300 * thumb_0_angle  # Increased from 100 to 300 for stronger push
-                            if debug_mode:
-                                print(f"[RELAX] 🌿 Strong gradient toward negative: {300 * thumb_0_angle:.6f}")
-                        else:
-                            # Very gentle gradient to keep it reasonably negative
-                            if thumb_0_angle < np.deg2rad(-50.0):
-                                grad_qpos[thumb_0_idx] += 20 * (thumb_0_angle + np.deg2rad(50.0))  # Gentle boundary
-                                if debug_mode:
-                                    print(f"[RELAX] 🌿 Gentle boundary gradient: {20 * (thumb_0_angle + np.deg2rad(50.0)):.6f}")
-                            else:
-                                if debug_mode:
-                                    print(f"[RELAX] 🌿 No gradient - free negative movement!")
+                        # CONSISTENT GRADIENT: Always gently push toward very negative angles
+                        target_angle = np.deg2rad(-45.0)  # Target: -45° (very negative)
+                        bias_strength = 100  # Gentle but consistent bias
+                        
+                        # Always apply gradient toward the target negative angle
+                        gradient_val = 2 * bias_strength * (thumb_0_angle - target_angle)
+                        grad_qpos[thumb_0_idx] += gradient_val
+                        
+                        if debug_mode:
+                            print(f"[CONSISTENT] 🌿 Gradient toward -45°: {gradient_val:.6f}")
                     
                     grad_qpos += 2 * self.gamma * x  # Add regularization
                     
