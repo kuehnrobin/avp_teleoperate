@@ -80,31 +80,9 @@ class Optimizer:
                 f"Optimizer has {len(self.idx_pin2fixed)} joints but non_target_qpos {fixed_qpos} is given"
             )
         
-        # print(f"[DEBUG] Optimizer.retarget called")
-        # print(f"[DEBUG] Optimizer class: {type(self).__name__}")
-        # print(f"[DEBUG] target_joint_names: {self.target_joint_names}")
-        # print(f"[DEBUG] idx_pin2target: {self.idx_pin2target}")
-        # print(f"[DEBUG] ref_value shape: {ref_value.shape}, type: {type(ref_value)}")
-        # print(f"[DEBUG] ref_value contains NaN: {np.isnan(ref_value).any()}")
-        # print(f"[DEBUG] ref_value contains Inf: {np.isinf(ref_value).any()}")
-        # print(f"[DEBUG] fixed_qpos shape: {fixed_qpos.shape}, values: {fixed_qpos}")
-        # print(f"[DEBUG] last_qpos shape: {np.array(last_qpos).shape}, values: {last_qpos}")
-        
-        # Debug joint name to value mapping
-        if len(last_qpos) == len(self.target_joint_names):
-            print(f"[DEBUG] Joint name to value mapping:")
-            for i, (name, value) in enumerate(zip(self.target_joint_names, last_qpos)):
-                print(f"[DEBUG]   {i}: {name} = {value:.6f} rad ({np.rad2deg(value):.2f}°)")
-        else:
-            print(f"[DEBUG] WARNING: last_qpos length {len(last_qpos)} != target_joint_names length {len(self.target_joint_names)}")
-        
-        # print(f"[DEBUG] last_qpos shape: {np.array(last_qpos).shape}, values: {last_qpos}")
-        # print(f"[DEBUG] last_qpos contains NaN: {np.isnan(last_qpos).any()}")
-        # print(f"[DEBUG] last_qpos contains Inf: {np.isinf(last_qpos).any()}")
-        
         # Validate inputs
         if np.isnan(ref_value).any() or np.isinf(ref_value).any():
-            #print(f"[ERROR] Invalid ref_value detected in retarget!")
+            print(f"[ERROR] Invalid ref_value detected in retarget!")
             return np.array(last_qpos, dtype=np.float32)
         
         if np.isnan(last_qpos).any() or np.isinf(last_qpos).any():
@@ -114,22 +92,8 @@ class Optimizer:
         objective_fn = self.get_objective_function(ref_value, fixed_qpos, np.array(last_qpos).astype(np.float32))
 
         self.opt.set_min_objective(objective_fn)
-        #print(f"[DEBUG] About to call opt.optimize with last_qpos: {last_qpos}")
         try:
             qpos = self.opt.optimize(last_qpos)
-            print(f"[DEBUG] Optimization successful, result: {qpos}")
-            
-            # Debug the final result mapping
-            if len(qpos) == len(self.target_joint_names):
-                print(f"[DEBUG] Final optimized joint values:")
-                for i, (name, value) in enumerate(zip(self.target_joint_names, qpos)):
-                    print(f"[DEBUG]   {i}: {name} = {value:.6f} rad ({np.rad2deg(value):.2f}°)")
-                    
-                # Specifically highlight thumb joints
-                for i, (name, value) in enumerate(zip(self.target_joint_names, qpos)):
-                    if "thumb" in name.lower():
-                        print(f"[THUMB] {name} = {value:.6f} rad ({np.rad2deg(value):.2f}°)")
-            
             return np.array(qpos, dtype=np.float32)
         except RuntimeError as e:
             print(f"[ERROR] RuntimeError in optimization: {e}")
@@ -759,29 +723,14 @@ class DexPilotOptimizer(Optimizer):
         projected_dist = np.array([eta1] * (num_fingers - 1) + [eta2] * ((num_fingers - 1) * (num_fingers - 2) // 2))
         return projected, s2_project_index_origin, s2_project_index_task, projected_dist
     def get_objective_function(self, target_vector: np.ndarray, fixed_qpos: np.ndarray, last_qpos: np.ndarray):
-        debug_mode = False  # Disable debug output for cleaner testing
-        if debug_mode:
-            print(f"[DEBUG] DexPilot get_objective_function called")
-            print(f"[DEBUG] target_vector shape: {target_vector.shape}")
-            print(f"[DEBUG] target_vector min/max: {target_vector.min():.6f} / {target_vector.max():.6f}")
-            print(f"[DEBUG] fixed_qpos shape: {fixed_qpos.shape}")
-            print(f"[DEBUG] last_qpos shape: {last_qpos.shape}")
-            print(f"[DEBUG] computed_link_names: {self.computed_link_names}")
-            print(f"[DEBUG] target_joint_names: {self.target_joint_names}")
-        
         qpos = np.zeros(self.num_joints)
         qpos[self.idx_pin2fixed] = fixed_qpos
         len_proj = len(self.projected)
         len_s2 = len(self.s2_project_index_task)
         len_s1 = len_proj - len_s2
         
-        if debug_mode:
-            print(f"[DEBUG] len_proj: {len_proj}, len_s1: {len_s1}, len_s2: {len_s2}")
-        
         # Update projection indicator
         target_vec_dist = np.linalg.norm(target_vector[:len_proj], axis=1)
-        if debug_mode:
-            print(f"[DEBUG] target_vec_dist: {target_vec_dist}")
         
         self.projected[:len_s1][target_vec_dist[0:len_s1] < self.project_dist] = True
         self.projected[:len_s1][target_vec_dist[0:len_s1] > self.escape_dist] = False
@@ -800,8 +749,6 @@ class DexPilotOptimizer(Optimizer):
         weight = torch.from_numpy(
             np.concatenate([weight, np.ones(self.num_fingers, dtype=np.float32) * len_proj + self.num_fingers])
         )
-        if debug_mode:
-            print(f"[DEBUG] weight shape: {weight.shape}, weight: {weight}")
         
         # Compute reference distance vector
         normal_vec = target_vector * self.scaling  # (10, 3)
@@ -813,22 +760,9 @@ class DexPilotOptimizer(Optimizer):
         torch_target_vec = torch.as_tensor(reference_vec, dtype=torch.float32)
         torch_target_vec.requires_grad_(False)
         
-        if debug_mode:
-            print(f"[DEBUG] torch_target_vec shape: {torch_target_vec.shape}")
-            print(f"[DEBUG] torch_target_vec contains NaN: {torch.isnan(torch_target_vec).any()}")
-            print(f"[DEBUG] torch_target_vec contains Inf: {torch.isinf(torch_target_vec).any()}")
-        
         def objective(x: np.ndarray, grad: np.ndarray) -> float:
             try:
-                if debug_mode:
-                    print(f"[DEBUG] Objective function called with x shape: {x.shape}")
-                    print(f"[DEBUG] x values: {x}")
-                    print(f"[DEBUG] x contains NaN: {np.isnan(x).any()}")
-                    print(f"[DEBUG] x contains Inf: {np.isinf(x).any()}")
-                
                 if np.isnan(x).any() or np.isinf(x).any():
-                    if debug_mode:
-                        print(f"[ERROR] Invalid x values detected!")
                     return float('inf')
                 
                 qpos[self.idx_pin2target] = x
@@ -838,8 +772,6 @@ class DexPilotOptimizer(Optimizer):
                 self.robot.compute_forward_kinematics(qpos)
                 target_link_poses = [self.robot.get_link_pose(index) for index in self.computed_link_indices]
                 body_pos = np.array([pose[:3, 3] for pose in target_link_poses])
-                if debug_mode:
-                    print(f"[DEBUG] body_pos shape: {body_pos.shape}")
                 
                 # Torch computation for accurate loss and grad
                 torch_body_pos = torch.as_tensor(body_pos)
@@ -848,21 +780,15 @@ class DexPilotOptimizer(Optimizer):
                 origin_link_pos = torch_body_pos[self.origin_link_indices, :]
                 task_link_pos = torch_body_pos[self.task_link_indices, :]
                 robot_vec = task_link_pos - origin_link_pos
-                if debug_mode:
-                    print(f"[DEBUG] robot_vec shape: {robot_vec.shape}")
                 
                 # Loss term for kinematics retargeting based on 3D position error
                 # Different from the original DexPilot, we use huber loss here instead of the squared dist
                 vec_dist = torch.norm(robot_vec - torch_target_vec, dim=1, keepdim=False)
-                if debug_mode:
-                    print(f"[DEBUG] vec_dist: {vec_dist}")
                 
                 huber_distance = (
                     self.huber_loss(vec_dist, torch.zeros_like(vec_dist)) * weight / (robot_vec.shape[0])
                 ).sum()
                 huber_distance = huber_distance.sum()
-                if debug_mode:
-                    print(f"[DEBUG] huber_distance: {huber_distance}")
 
                 # Add penalty for thumb being too low
                 # Use actual link names from config
@@ -879,16 +805,9 @@ class DexPilotOptimizer(Optimizer):
                     elif "middle" in name and ("tip" in name or "1_link" in name):
                         middle_tip_idx = i
                 
-                if debug_mode:
-                    print(f"[DEBUG] Found link indices - thumb: {thumb_tip_idx}, index: {index_tip_idx}, middle: {middle_tip_idx}")
-                
                 # Skip penalties if we can't find the required links
                 if thumb_tip_idx is None or index_tip_idx is None or middle_tip_idx is None:
-                    if debug_mode:
-                        print(f"[DEBUG] Skipping penalties - missing link indices")
                     result = huber_distance.cpu().detach().item()
-                    if debug_mode:
-                        print(f"[DEBUG] Final result (no penalties): {result}")
                     
                     if grad.size > 0:
                         jacobians = []
@@ -909,8 +828,6 @@ class DexPilotOptimizer(Optimizer):
                         grad_qpos = grad_qpos.mean(1).sum(0)
                         grad_qpos += 2 * self.gamma * x
                         grad[:] = grad_qpos[:]
-                        if debug_mode:
-                            print(f"[DEBUG] Gradient computed, norm: {np.linalg.norm(grad_qpos)}")
                     return result
 
                 thumb_pos = torch_body_pos[thumb_tip_idx, :]
@@ -949,11 +866,13 @@ class DexPilotOptimizer(Optimizer):
                     target_angle = np.deg2rad(-80.0)  # Very aggressive: -80°
                     bias_strength = 500  # Very strong bias for pinching
                     pinch_type = "thumb-index"
+                    print("🎯 THUMB-INDEX PINCHING ACTIVATED")
                 elif is_thumb_middle_pinching:
                     # Thumb-middle pinching: moderate negative angle for power grip
                     target_angle = np.deg2rad(10.0)  # Moderate: -30°
                     bias_strength = 300  # Strong bias for pinching
                     pinch_type = "thumb-middle"
+                    print("🎯 THUMB-MIDDLE PINCHING ACTIVATED")
                 else:
                     # No pinching: gentle negative bias for natural hand position
                     target_angle = np.deg2rad(-45.0)  # Default: -45°
@@ -974,12 +893,6 @@ class DexPilotOptimizer(Optimizer):
                     # Apply dynamic target angle based on pinching detection
                     penalty_val = bias_strength * (thumb_0_angle - target_angle)**2
                     thumb_angle_penalty += penalty_val
-                    
-                    if debug_mode:
-                        print(f"[PINCH] 🎯 {pinch_type} detected: target={np.rad2deg(target_angle):.1f}°, strength={bias_strength}, current={np.rad2deg(thumb_0_angle):.2f}°")
-                        print(f"[PINCH] OpenXR distances - thumb-index: {thumb_index_openxr_dist:.3f}m, thumb-middle: {thumb_middle_openxr_dist:.3f}m")
-                        print(f"[DEBUG] thumb_0_angle: {thumb_0_angle:.5f} rad ({np.rad2deg(thumb_0_angle):.2f}°)")
-                        print(f"[DEBUG] thumb_angle_penalty: {thumb_angle_penalty:.6f}")
 
                 # COMMENTED OUT: Gap penalty for gaps between thumb and primary fingers during pinching
                 # thumb_index_target_dist = torch.norm(torch_target_vec[0, :]) if len(torch_target_vec) > 0 else float('inf')
@@ -1000,12 +913,8 @@ class DexPilotOptimizer(Optimizer):
                 #         gap_penalty += gap_penalty_val.detach().item() if hasattr(gap_penalty_val, 'detach') else gap_penalty_val.item()
 
                 result = huber_distance.cpu().detach().item() + thumb_penalty + thumb_angle_penalty + gap_penalty
-                if debug_mode:
-                    print(f"[DEBUG] Final result: {result} (huber: {huber_distance.cpu().detach().item()}, thumb: {thumb_penalty}, angle: {thumb_angle_penalty}, gap: {gap_penalty})")
                 
                 if np.isnan(result) or np.isinf(result):
-                    if debug_mode:
-                        print(f"[ERROR] Invalid result detected: {result}")
                     return float('inf')
 
                 if grad.size > 0:
@@ -1066,27 +975,16 @@ class DexPilotOptimizer(Optimizer):
                         # Apply gradient toward the dynamic target angle
                         gradient_val = 2 * bias_strength * (thumb_0_angle - target_angle)
                         grad_qpos[thumb_0_idx] += gradient_val
-                        
-                        if debug_mode:
-                            print(f"[PINCH] 🎯 Dynamic gradient for {pinch_type}: {gradient_val:.6f} (toward {np.rad2deg(target_angle):.1f}°)")
                     
                     grad_qpos += 2 * self.gamma * x  # Add regularization
                     
                     if np.isnan(grad_qpos).any() or np.isinf(grad_qpos).any():
-                        if debug_mode:
-                            print(f"[ERROR] Invalid gradient detected!")
                         grad[:] = np.zeros_like(grad_qpos)
                     else:
                         grad[:] = grad_qpos[:]
-                        if debug_mode:
-                            print(f"[DEBUG] Gradient computed, norm: {np.linalg.norm(grad_qpos)}")
                         
                 return result
             except Exception as e:
-                if debug_mode:
-                    print(f"[ERROR] Exception in objective function: {e}")
-                    import traceback
-                    traceback.print_exc()
                 return float('inf')
         return objective
     
