@@ -279,7 +279,7 @@ class Dex3_1_Controller:
                         joint_pos[0] = left_hand_mat[0]   # wrist -> index 0
                         joint_pos[4] = left_hand_mat[4]   # thumb_tip -> index 4
                         joint_pos[8] = left_hand_mat[9]   # index_tip -> index 8 (OpenXR index 9)
-                        joint_pos[12] = left_hand_mat[14] # middle_tip -> index 12 (OpenXR index 14)
+                        joint_pos[12] = left_hand_mat[24] # middle_tip -> index 12 (OpenXR index 14 for middle finger) 24 for pinky finger 
                         #joint_pos = left_hand_mat.copy()  # Use the full OpenXR data directly
                         # Calculate vectors using the indices DexPilot specifies (same as show_realtime_retargeting.py)
                         ref_left_value = joint_pos[task_indices, :] - joint_pos[origin_indices, :]
@@ -342,7 +342,7 @@ class Dex3_1_Controller:
                         joint_pos[0] = right_hand_mat[0]   # wrist -> index 0
                         joint_pos[4] = right_hand_mat[4]   # thumb_tip -> index 4
                         joint_pos[8] = right_hand_mat[9]   # index_tip -> index 8 (OpenXR index 9)
-                        joint_pos[12] = right_hand_mat[14] # middle_tip -> index 12 (OpenXR index 14)
+                        joint_pos[12] = right_hand_mat[24] # middle_tip -> index 12 (OpenXR index 14)
                         
                         # Calculate vectors using the indices DexPilot specifies (same as show_realtime_retargeting.py)
                         ref_right_value = joint_pos[task_indices, :] - joint_pos[origin_indices, :]
