@@ -261,50 +261,6 @@ class VectorOptimizer(Optimizer):
             huber_distance = self.huber_loss(vec_dist, torch.zeros_like(vec_dist))
             result = huber_distance.cpu().detach().item()
 
-            # Add joint angle biases to improve hand behavior
-            joint_bias_penalty = 0.0
-            
-            # Find joint indices by name pattern matching
-            thumb_0_idx = None
-            thumb_1_idx = None
-            index_0_idx = None
-            middle_0_idx = None
-            
-            for i, joint_name in enumerate(self.target_joint_names):
-                if "thumb_0_joint" in joint_name:
-                    thumb_0_idx = i
-                elif "thumb_1_joint" in joint_name:
-                    thumb_1_idx = i
-                elif "index_0_joint" in joint_name:
-                    index_0_idx = i
-                elif "middle_0_joint" in joint_name:
-                    middle_0_idx = i
-            
-            # Bias 1: Push thumb_0_joint toward negative values (-45 degrees)
-            if thumb_0_idx is not None:
-                thumb_0_angle = x[thumb_0_idx]
-                thumb_target_angle = -0.785398  # -45 degrees in radians (back to original target)
-                thumb_bias_strength = 1.0       # Very gentle bias strength - start small!
-                thumb_penalty = thumb_bias_strength * (thumb_0_angle - thumb_target_angle) ** 2
-                joint_bias_penalty += thumb_penalty
-            
-            # Bias 2: Push thumb_1_joint, index_0_joint, middle_0_joint toward 0 degrees (open hand)
-            open_hand_bias_strength = 0.5   # Very gentle bias toward open hand position - start small!
-            
-            if thumb_1_idx is not None:
-                thumb_1_penalty = open_hand_bias_strength * (x[thumb_1_idx] ** 2)
-                joint_bias_penalty += thumb_1_penalty
-                
-            if index_0_idx is not None:
-                index_0_penalty = open_hand_bias_strength * (x[index_0_idx] ** 2)
-                joint_bias_penalty += index_0_penalty
-                
-            if middle_0_idx is not None:
-                middle_0_penalty = open_hand_bias_strength * (x[middle_0_idx] ** 2)
-                joint_bias_penalty += middle_0_penalty
-            
-            result += joint_bias_penalty
-
             if grad.size > 0:
                 jacobians = []
                 for i, index in enumerate(self.computed_link_indices):
@@ -328,25 +284,6 @@ class VectorOptimizer(Optimizer):
                 grad_qpos = np.matmul(grad_pos, np.array(jacobians))
                 grad_qpos = grad_qpos.mean(1).sum(0)
                 grad_qpos += 2 * self.norm_delta * (x - last_qpos)
-
-                # Add joint bias gradient contributions
-                # Gradient for thumb_0_joint bias (toward negative values)
-                if thumb_0_idx is not None:
-                    thumb_bias_gradient = 2 * thumb_bias_strength * (thumb_0_angle - thumb_target_angle)
-                    grad_qpos[thumb_0_idx] += thumb_bias_gradient
-                
-                # Gradients for open hand biases (toward 0 degrees)
-                if thumb_1_idx is not None:
-                    thumb_1_gradient = 2 * open_hand_bias_strength * x[thumb_1_idx]
-                    grad_qpos[thumb_1_idx] += thumb_1_gradient
-                    
-                if index_0_idx is not None:
-                    index_0_gradient = 2 * open_hand_bias_strength * x[index_0_idx]
-                    grad_qpos[index_0_idx] += index_0_gradient
-                    
-                if middle_0_idx is not None:
-                    middle_0_gradient = 2 * open_hand_bias_strength * x[middle_0_idx]
-                    grad_qpos[middle_0_idx] += middle_0_gradient
 
                 grad[:] = grad_qpos[:]
 
