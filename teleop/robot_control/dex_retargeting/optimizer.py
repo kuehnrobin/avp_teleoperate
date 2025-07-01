@@ -80,15 +80,15 @@ class Optimizer:
                 f"Optimizer has {len(self.idx_pin2fixed)} joints but non_target_qpos {fixed_qpos} is given"
             )
         
-        print(f"[DEBUG] Optimizer.retarget called")
-        print(f"[DEBUG] Optimizer class: {type(self).__name__}")
-        print(f"[DEBUG] target_joint_names: {self.target_joint_names}")
-        print(f"[DEBUG] idx_pin2target: {self.idx_pin2target}")
-        print(f"[DEBUG] ref_value shape: {ref_value.shape}, type: {type(ref_value)}")
-        print(f"[DEBUG] ref_value contains NaN: {np.isnan(ref_value).any()}")
-        print(f"[DEBUG] ref_value contains Inf: {np.isinf(ref_value).any()}")
-        print(f"[DEBUG] fixed_qpos shape: {fixed_qpos.shape}, values: {fixed_qpos}")
-        print(f"[DEBUG] last_qpos shape: {np.array(last_qpos).shape}, values: {last_qpos}")
+        # print(f"[DEBUG] Optimizer.retarget called")
+        # print(f"[DEBUG] Optimizer class: {type(self).__name__}")
+        # print(f"[DEBUG] target_joint_names: {self.target_joint_names}")
+        # print(f"[DEBUG] idx_pin2target: {self.idx_pin2target}")
+        # print(f"[DEBUG] ref_value shape: {ref_value.shape}, type: {type(ref_value)}")
+        # print(f"[DEBUG] ref_value contains NaN: {np.isnan(ref_value).any()}")
+        # print(f"[DEBUG] ref_value contains Inf: {np.isinf(ref_value).any()}")
+        # print(f"[DEBUG] fixed_qpos shape: {fixed_qpos.shape}, values: {fixed_qpos}")
+        # print(f"[DEBUG] last_qpos shape: {np.array(last_qpos).shape}, values: {last_qpos}")
         
         # Debug joint name to value mapping
         if len(last_qpos) == len(self.target_joint_names):
@@ -98,13 +98,13 @@ class Optimizer:
         else:
             print(f"[DEBUG] WARNING: last_qpos length {len(last_qpos)} != target_joint_names length {len(self.target_joint_names)}")
         
-        print(f"[DEBUG] last_qpos shape: {np.array(last_qpos).shape}, values: {last_qpos}")
-        print(f"[DEBUG] last_qpos contains NaN: {np.isnan(last_qpos).any()}")
-        print(f"[DEBUG] last_qpos contains Inf: {np.isinf(last_qpos).any()}")
+        # print(f"[DEBUG] last_qpos shape: {np.array(last_qpos).shape}, values: {last_qpos}")
+        # print(f"[DEBUG] last_qpos contains NaN: {np.isnan(last_qpos).any()}")
+        # print(f"[DEBUG] last_qpos contains Inf: {np.isinf(last_qpos).any()}")
         
         # Validate inputs
         if np.isnan(ref_value).any() or np.isinf(ref_value).any():
-            print(f"[ERROR] Invalid ref_value detected in retarget!")
+            #print(f"[ERROR] Invalid ref_value detected in retarget!")
             return np.array(last_qpos, dtype=np.float32)
         
         if np.isnan(last_qpos).any() or np.isinf(last_qpos).any():
@@ -114,7 +114,7 @@ class Optimizer:
         objective_fn = self.get_objective_function(ref_value, fixed_qpos, np.array(last_qpos).astype(np.float32))
 
         self.opt.set_min_objective(objective_fn)
-        print(f"[DEBUG] About to call opt.optimize with last_qpos: {last_qpos}")
+        #print(f"[DEBUG] About to call opt.optimize with last_qpos: {last_qpos}")
         try:
             qpos = self.opt.optimize(last_qpos)
             print(f"[DEBUG] Optimization successful, result: {qpos}")
@@ -319,13 +319,13 @@ class VectorOptimizer(Optimizer):
             # Bias 1: Push thumb_0_joint toward negative values (-45 degrees)
             if thumb_0_idx is not None:
                 thumb_0_angle = x[thumb_0_idx]
-                thumb_target_angle = math.radians(-60)  # -45 degrees in radians
-                thumb_bias_strength = 50.0      # Moderate bias strength for VectorOptimizer
+                thumb_target_angle = -0.785398  # -45 degrees in radians (back to original target)
+                thumb_bias_strength = 1.0       # Very gentle bias strength - start small!
                 thumb_penalty = thumb_bias_strength * (thumb_0_angle - thumb_target_angle) ** 2
                 joint_bias_penalty += thumb_penalty
             
             # Bias 2: Push thumb_1_joint, index_0_joint, middle_0_joint toward 0 degrees (open hand)
-            open_hand_bias_strength = 30.0  # Gentle bias toward open hand position
+            open_hand_bias_strength = 0.5   # Very gentle bias toward open hand position - start small!
             
             if thumb_1_idx is not None:
                 thumb_1_penalty = open_hand_bias_strength * (x[thumb_1_idx] ** 2)
@@ -626,8 +626,21 @@ class DexPilotOptimizerAnyTeleop(Optimizer):
         return objective
 
 
-class DexPilotOptimizerThumbSystem(Optimizer):
-    """Retargeting optimizer using the method proposed in DexPilot
+class DexPilotOptimizer(Optimizer):
+    """🎯 EXPERIMENTAL: Retargeting optimizer with DYNAMIC PINCHING DETECTION
+    
+    This version implements:
+    - DYNAMIC PINCHING DETECTION: Analyzes OpenXR distance data to detect thumb-index and thumb-middle pinching
+    - AGGRESSIVE TARGET ANGLES: Switches to very negative angles (-80° for precision, -30° for power grip) during pinching
+    - ADAPTIVE BIAS STRENGTHS: Uses strong bias (300-500x) during pinching, gentle bias (100x) for open hand
+    - THUMB POSITION PENALTIES: Prevents thumb from dropping below other fingers
+    - GAP PENALTIES: Enforces proper finger spacing during pinching gestures
+    
+    Pinching Detection Logic:
+    - thumb-index pinching (OpenXR dist < 2.5cm) → target: -80°, bias: 500x (precision grip)
+    - thumb-middle pinching (OpenXR dist < 2.5cm) → target: -30°, bias: 300x (power grip)  
+    - open hand (no pinching detected) → target: -45°, bias: 100x (natural position)
+    
     This is a broader adaptation of the original optimizer delineated in the DexPilot paper.
     While the initial DexPilot study focused solely on the four-fingered Allegro Hand, this version of the optimizer
     embraces the same principles for both four-fingered and five-fingered hands. It projects the distance between the
@@ -915,7 +928,38 @@ class DexPilotOptimizerThumbSystem(Optimizer):
                     penalty_val = 300 * (thumb_middle_diff + 0.02)**2  # Increased from 100 to 300
                     thumb_penalty += penalty_val.detach().item() if hasattr(penalty_val, 'detach') else penalty_val
 
-                # Add penalty for thumb_0 joint angle - CONSISTENT NEGATIVE BIAS
+                # DYNAMIC PINCHING DETECTION SYSTEM 🎯
+                # Detect pinching gestures from OpenXR data and adjust thumb_0_joint target angles aggressively
+                
+                # Calculate distances between fingertips from OpenXR data (target_vector contains distance info)
+                thumb_index_openxr_dist = torch.norm(torch_target_vec[0, :]) if len(torch_target_vec) > 0 else float('inf')
+                thumb_middle_openxr_dist = torch.norm(torch_target_vec[1, :]) if len(torch_target_vec) > 1 else float('inf')
+                
+                # Pinching detection thresholds
+                pinch_threshold = 0.025  # 2.5 cm - OpenXR distance threshold for pinching detection
+                
+                # Determine pinching state and target angle
+                is_thumb_index_pinching = thumb_index_openxr_dist < pinch_threshold
+                is_thumb_middle_pinching = thumb_middle_openxr_dist < pinch_threshold
+                
+                # Dynamic target angle selection based on pinching state
+                if is_thumb_index_pinching:
+                    # Thumb-index pinching: aggressive negative angle for precision grip
+                    target_angle = np.deg2rad(-80.0)  # Very aggressive: -80°
+                    bias_strength = 500  # Very strong bias for pinching
+                    pinch_type = "thumb-index"
+                elif is_thumb_middle_pinching:
+                    # Thumb-middle pinching: moderate negative angle for power grip
+                    target_angle = np.deg2rad(10.0)  # Moderate: -30°
+                    bias_strength = 300  # Strong bias for pinching
+                    pinch_type = "thumb-middle"
+                else:
+                    # No pinching: gentle negative bias for natural hand position
+                    target_angle = np.deg2rad(-45.0)  # Default: -45°
+                    bias_strength = 100  # Gentle bias
+                    pinch_type = "open"
+                
+                # Add penalty for thumb_0 joint angle - DYNAMIC PINCHING SYSTEM
                 thumb_0_idx = None
                 for i, joint_name in enumerate(self.target_joint_names):
                     if "thumb_0_joint" in joint_name:
@@ -926,19 +970,13 @@ class DexPilotOptimizerThumbSystem(Optimizer):
                 if thumb_0_idx is not None:
                     thumb_0_angle = x[thumb_0_idx]
                     
-                    # CONSISTENT NEGATIVE BIAS: Always gently push toward very negative angles
-                    # This creates a constant bias that counteracts kinematic differences
-                    target_angle = np.deg2rad(-45.0)  # Target: -45° (very negative)
-                    bias_strength = 100  # Gentle but consistent bias
-                    
-                    # Always apply gentle bias toward very negative angles
+                    # Apply dynamic target angle based on pinching detection
                     penalty_val = bias_strength * (thumb_0_angle - target_angle)**2
                     thumb_angle_penalty += penalty_val
                     
                     if debug_mode:
-                        print(f"[CONSISTENT] 🌿 Always pushing toward -45°: current={np.rad2deg(thumb_0_angle):.2f}°, penalty={penalty_val:.6f}")
-                    
-                    if debug_mode:
+                        print(f"[PINCH] 🎯 {pinch_type} detected: target={np.rad2deg(target_angle):.1f}°, strength={bias_strength}, current={np.rad2deg(thumb_0_angle):.2f}°")
+                        print(f"[PINCH] OpenXR distances - thumb-index: {thumb_index_openxr_dist:.3f}m, thumb-middle: {thumb_middle_openxr_dist:.3f}m")
                         print(f"[DEBUG] thumb_0_angle: {thumb_0_angle:.5f} rad ({np.rad2deg(thumb_0_angle):.2f}°)")
                         print(f"[DEBUG] thumb_angle_penalty: {thumb_angle_penalty:.6f}")
 
@@ -1020,16 +1058,15 @@ class DexPilotOptimizerThumbSystem(Optimizer):
                     
                     # Add the joint angle penalty gradient and regularization
                     if thumb_0_idx is not None:
-                        # CONSISTENT GRADIENT: Always gently push toward very negative angles
-                        target_angle = np.deg2rad(-45.0)  # Target: -45° (very negative)
-                        bias_strength = 100  # Gentle but consistent bias
+                        # DYNAMIC GRADIENT: Use the same target angle and bias strength from pinching detection
+                        # (target_angle and bias_strength are already computed above based on pinching state)
                         
-                        # Always apply gradient toward the target negative angle
+                        # Apply gradient toward the dynamic target angle
                         gradient_val = 2 * bias_strength * (thumb_0_angle - target_angle)
                         grad_qpos[thumb_0_idx] += gradient_val
                         
                         if debug_mode:
-                            print(f"[CONSISTENT] 🌿 Gradient toward -45°: {gradient_val:.6f}")
+                            print(f"[PINCH] 🎯 Dynamic gradient for {pinch_type}: {gradient_val:.6f} (toward {np.rad2deg(target_angle):.1f}°)")
                     
                     grad_qpos += 2 * self.gamma * x  # Add regularization
                     
@@ -1052,7 +1089,7 @@ class DexPilotOptimizerThumbSystem(Optimizer):
         return objective
     
 
-class DexPilotOptimizer(Optimizer):
+class DexPilotOptimizerConsist(Optimizer):
     """Retargeting optimizer using the method proposed in DexPilot
 
     This is a broader adaptation of the original optimizer delineated in the DexPilot paper.
