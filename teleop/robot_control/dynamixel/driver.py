@@ -18,11 +18,10 @@ from dynamixel_sdk.robotis_def import (
 
 # Constants
 ADDR_TORQUE_ENABLE = 64
+ADDR_LED = 65
 ADDR_GOAL_POSITION = 116
 LEN_GOAL_POSITION = 4
-#! rewrite 
-ADDR_PRESENT_POSITION = 132
-ADDR_PRESENT_POSITION = 140 #Position Trajectory(140)
+ADDR_PRESENT_POSITION = 132  # Present Position address for XL430-W250-T
 LEN_PRESENT_POSITION = 4
 TORQUE_ENABLE = 1
 TORQUE_DISABLE = 0
@@ -148,6 +147,12 @@ class DynamixelDriver(DynamixelDriverProtocol):
         except Exception as e:
             print(f"port: {port}, {e}")
 
+        # Turn on LEDs for visual feedback
+        try:
+            self.set_led_status(True)
+        except Exception as e:
+            print(f"Warning: Failed to turn on LEDs: {e}")
+
         # control the thread
         self._stop_thread = Event()
 
@@ -209,10 +214,21 @@ class DynamixelDriver(DynamixelDriverProtocol):
 
         self._torque_enabled = enable
 
+    def set_led_status(self, enable: bool):
+        """Turn LEDs on or off for visual feedback"""
+        led_value = 1 if enable else 0
+        with self._lock:
+            for dxl_id in self._ids:
+                dxl_comm_result, dxl_error = self._packetHandler.write1ByteTxRx(
+                    self._portHandler, dxl_id, ADDR_LED, led_value
+                )
+                if dxl_comm_result != COMM_SUCCESS or dxl_error != 0:
+                    print(f"Warning: Failed to set LED for servo {dxl_id}")
+
     def _start_reading_thread(self):
         self._reading_thread = Thread(target=self._read_joint_angles)
-        # self._reading_thread.daemon = True
-        # self._reading_thread.start()
+        self._reading_thread.daemon = True
+        self._reading_thread.start()
 
     def _read_joint_angles(self):
         # Continuously read joint angles and update the joint_angles array
@@ -251,6 +267,11 @@ class DynamixelDriver(DynamixelDriverProtocol):
     def close(self):
         self._stop_thread.set()
         self._reading_thread.join()
+        # Turn off LEDs before closing
+        try:
+            self.set_led_status(False)
+        except:
+            pass
         self._portHandler.closePort()
 
 

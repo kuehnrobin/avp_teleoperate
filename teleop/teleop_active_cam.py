@@ -62,15 +62,17 @@ def main():
     logger = setup_logging(args.verbose)
     logger.info("Starting Active Camera Head Tracking System")
 
-    # Safe starting positions (in degrees) - these are the calibrated safe positions
-    # ID 1 (vertical/pitch): 18.54°, ID 2 (horizontal/yaw): 91.41°
-    START_PITCH_DEG = 18.54  # Servo ID 1 - vertical movement (pitch)
-    START_YAW_DEG = 91.41    # Servo ID 2 - horizontal movement (yaw)
+    # Use the current servo positions as fixed starting positions
+    # These positions were read when the servos were properly positioned for the camera
+    START_PITCH_DEG = 143.96  # Servo ID 1 - vertical movement (pitch) 
+    START_YAW_DEG = 94.75     # Servo ID 2 - horizontal movement (yaw)
     
-    # Convert to radians for the servo commands
+    # Convert to radians for servo commands
     start_pitch_rad = np.deg2rad(START_PITCH_DEG)
     start_yaw_rad = np.deg2rad(START_YAW_DEG)
     start_joints = np.array([start_pitch_rad, start_yaw_rad])
+    
+    logger.info(f"Using fixed starting positions - Pitch: {START_PITCH_DEG}°, Yaw: {START_YAW_DEG}°")
     
     # Safety limits (in degrees from start position)
     max_movement_deg = args.max_movement
@@ -84,15 +86,24 @@ def main():
     # Initialize Dynamixel servo controller for the active camera platform
     try:
         agent = DynamixelAgent(port=args.port, start_joints=start_joints)
+        
+        # Read current positions
+        current_joints = agent._robot.get_joint_state()
+        current_pitch_deg = np.rad2deg(current_joints[0])
+        current_yaw_deg = np.rad2deg(current_joints[1])
+        logger.info(f"Current servo positions - Pitch: {current_pitch_deg:.2f}°, Yaw: {current_yaw_deg:.2f}°")
+        
+        # Enable torque
         agent._robot.set_torque_mode(True)
+        logger.info("Torque enabled")
         
         # Move to starting position slowly and safely
-        logger.info("Moving to safe starting position...")
+        logger.info(f"Moving to starting position - Pitch: {START_PITCH_DEG}°, Yaw: {START_YAW_DEG}°")
         agent._robot.command_joint_state(start_joints)
         time.sleep(2.0)  # Wait for servos to reach position
         
         logger.info(f"Dynamixel controller initialized on port {args.port}")
-        logger.info("Servos positioned at safe starting position")
+        logger.info("Servos positioned at starting position and ready for head tracking control")
     except Exception as e:
         logger.error(f"Failed to initialize Dynamixel controller: {e}")
         return

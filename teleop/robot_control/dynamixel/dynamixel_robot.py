@@ -134,11 +134,30 @@ class DynamixelRobot(Robot):
             pos = self._last_pos * (1 - self._alpha) + pos * self._alpha
             self._last_pos = pos
 
-        new_pos = np.append(pos, 0)
-        return new_pos
+        # Only append extra joint if we have a gripper configuration
+        if self.gripper_open_close is not None:
+            new_pos = np.append(pos, 0)
+            return new_pos
+        else:
+            return pos
 
     def map_to_valid_range(self, radians_array):
-        mapped_radians = np.mod(radians_array, 2 * np.pi)
+        # XL430-W250-T servo specifications:
+        # - Operating angle: 0° to 300° (0 to 5.236 radians)
+        # - Position units: 0 to 4095, where 4096 units = 360°
+        # - Safe operating range: 0 to 300° = 0 to 5.236 radians
+        
+        # Convert to numpy array for consistent handling
+        radians_array = np.asarray(radians_array)
+        
+        # Define the valid range for XL430-W250-T (300° = 5.236 radians)
+        min_angle = 0.0
+        max_angle = 5.236  # 300 degrees in radians
+        
+        # Clamp values to the valid range instead of using modulo
+        # This prevents sending out-of-range commands that servos reject
+        mapped_radians = np.clip(radians_array, min_angle, max_angle)
+        
         return mapped_radians
 
     def command_joint_state(self, joint_state: np.ndarray) -> None:
