@@ -814,7 +814,7 @@ class DexPilotOptimizer(Optimizer):
                     # No pinching: natural hand position (middle between index and middle)
                     # TODO: Was passiert wenn wir die hier rausnehmen??
                     target_angle = np.deg2rad(-60.0)  # Middle position in new coordinate system
-                    bias_strength = 50 #100  # Gentle bias
+                    bias_strength = 30 #100  # Gentle bias
                     pinch_type = "open"
                 
                 # Add penalty for thumb_0 joint angle - DYNAMIC PINCHING SYSTEM
