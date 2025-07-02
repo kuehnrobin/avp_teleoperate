@@ -54,17 +54,45 @@ def main():
     parser = argparse.ArgumentParser(description="Active Camera Control using VR Head Tracking")
     parser.add_argument('--port', type=str, default="/dev/ttyUSB0", help="Serial port for the Dynamixel servo controller")
     parser.add_argument('--verbose', action='store_true', help='Enable verbose logging')
+    parser.add_argument('--safe-mode', action='store_true', default=True, help='Enable safe mode with limited movement')
+    parser.add_argument('--max-movement', type=float, default=10.0, help='Maximum movement in degrees from start position')
     args = parser.parse_args()
 
     # Setup logging
     logger = setup_logging(args.verbose)
     logger.info("Starting Active Camera Head Tracking System")
 
+    # Safe starting positions (in degrees) - these are the calibrated safe positions
+    # ID 1 (vertical/pitch): 18.54°, ID 2 (horizontal/yaw): 91.41°
+    START_PITCH_DEG = 18.54  # Servo ID 1 - vertical movement (pitch)
+    START_YAW_DEG = 91.41    # Servo ID 2 - horizontal movement (yaw)
+    
+    # Convert to radians for the servo commands
+    start_pitch_rad = np.deg2rad(START_PITCH_DEG)
+    start_yaw_rad = np.deg2rad(START_YAW_DEG)
+    start_joints = np.array([start_pitch_rad, start_yaw_rad])
+    
+    # Safety limits (in degrees from start position)
+    max_movement_deg = args.max_movement
+    if args.safe_mode:
+        max_movement_deg = min(max_movement_deg, 5.0)  # Extra conservative in safe mode
+        logger.info(f"Safe mode enabled - limiting movement to ±{max_movement_deg}° from start position")
+    
+    logger.info(f"Starting positions - Pitch: {START_PITCH_DEG}°, Yaw: {START_YAW_DEG}°")
+    logger.info(f"Movement limits: ±{max_movement_deg}° from start position")
+
     # Initialize Dynamixel servo controller for the active camera platform
     try:
-        agent = DynamixelAgent(port=args.port)
+        agent = DynamixelAgent(port=args.port, start_joints=start_joints)
         agent._robot.set_torque_mode(True)
+        
+        # Move to starting position slowly and safely
+        logger.info("Moving to safe starting position...")
+        agent._robot.command_joint_state(start_joints)
+        time.sleep(2.0)  # Wait for servos to reach position
+        
         logger.info(f"Dynamixel controller initialized on port {args.port}")
+        logger.info("Servos positioned at safe starting position")
     except Exception as e:
         logger.error(f"Failed to initialize Dynamixel controller: {e}")
         return
@@ -74,10 +102,10 @@ def main():
         'fps': 30,
         'head_camera_type': 'opencv',
         'head_camera_image_shape': [480, 1280],  # [1080, 3840], #[480, 1280]
-        'head_camera_id_numbers': [6],
-        'wrist_camera_type': 'opencv',
-        'wrist_camera_image_shape': [480, 640],
-        'wrist_camera_id_numbers': [10, 12],
+        'head_camera_id_numbers': [2],
+        # 'wrist_camera_type': 'opencv',
+        # 'wrist_camera_image_shape': [480, 640],
+        # 'wrist_camera_id_numbers': [10, 12],
     }
 
     # Determine if using binocular setup
@@ -103,7 +131,7 @@ def main():
     
     # Reuse the same image client as in teleop_hand_and_arm.py
     # The active camera will show what the camera sees (we're just moving the camera platform)
-    img_client = ImageClient(tv_img_shape=tv_img_shape, tv_img_shm_name=tv_img_shm.name)
+    img_client = ImageClient(tv_img_shape=tv_img_shape, tv_img_shm_name=tv_img_shm.name, server_address = "127.0.0.1")
     image_receive_thread = Thread(target=img_client.receive_process, daemon=True)
     image_receive_thread.start()
     logger.info("Image receive thread started")
@@ -122,19 +150,35 @@ def main():
             rot = R.from_matrix(head_rmat)
             euler_angles = rot.as_euler('xyz', degrees=True)
             
-            # Extract yaw and pitch for camera movement (ignoring roll)
-            # Note: You may need to adjust these values based on your specific setup
-            yaw, pitch = euler_angles[1], euler_angles[0]
+            # Extract pitch and yaw for camera movement (ignoring roll)
+            # euler_angles[0] = pitch (up/down), euler_angles[1] = yaw (left/right)
+            head_pitch, head_yaw = euler_angles[0], euler_angles[1]
             
-            # Apply scaling and limits to control camera movement sensitivity
-            yaw_scaled = np.clip(yaw * 0.5, -45, 45)   # Scale and limit yaw movement
-            pitch_scaled = np.clip(pitch * 0.5, -30, 30)  # Scale and limit pitch movement
+            # Apply scaling to reduce sensitivity and convert to movement relative to start position
+            pitch_movement_deg = head_pitch * 0.3  # Scale down head movement
+            yaw_movement_deg = head_yaw * 0.3      # Scale down head movement
             
-            logger.debug(f"Head orientation - Yaw: {yaw_scaled:.2f}°, Pitch: {pitch_scaled:.2f}°")
+            # Apply safety limits (movement from start position)
+            pitch_movement_deg = np.clip(pitch_movement_deg, -max_movement_deg, max_movement_deg)
+            yaw_movement_deg = np.clip(yaw_movement_deg, -max_movement_deg, max_movement_deg)
+            
+            # Calculate target positions (start position + movement)
+            target_pitch_deg = START_PITCH_DEG + pitch_movement_deg
+            target_yaw_deg = START_YAW_DEG + yaw_movement_deg
+            
+            # Convert to radians for servo commands
+            target_pitch_rad = np.deg2rad(target_pitch_deg)
+            target_yaw_rad = np.deg2rad(target_yaw_deg)
+            
+            # Command servos: [pitch (ID 1), yaw (ID 2)]
+            target_joints = np.array([target_pitch_rad, target_yaw_rad])
+            
+            logger.debug(f"Head: pitch={head_pitch:.1f}°, yaw={head_yaw:.1f}° | "
+                        f"Target: pitch={target_pitch_deg:.1f}°, yaw={target_yaw_deg:.1f}°")
             
             try:
                 # Send commands to Dynamixel servos to move the camera
-                agent._robot.command_joint_state([yaw_scaled, pitch_scaled])
+                agent._robot.command_joint_state(target_joints)
             except Exception as e:
                 logger.warning(f"Failed to command servos: {e}")
             
