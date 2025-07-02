@@ -15,8 +15,148 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
 from teleop.open_television.tv_wrapper import TeleVisionWrapper
-from teleop.robot_control.dynamixel.active_cam import DynamixelAgent
 from teleop.image_server.image_client import ImageClient
+
+# Import dynamixel-api for servo control
+from dynamixel_api import XL430W250TConnector, Motor
+
+class ActiveCameraController:
+    """Controller for the active camera servo system using dynamixel-api."""
+    
+    def __init__(self, port="/dev/ttyUSB0", baud_rate=2000000, pitch_id=1, yaw_id=2):
+        """Initialize the camera controller with two servos for pitch and yaw.
+        
+        Args:
+            port: Serial port for the U2D2 interface
+            baud_rate: Communication baud rate (default 2Mbps for XL430-W250-T)
+            pitch_id: Dynamixel ID for pitch servo (vertical movement)
+            yaw_id: Dynamixel ID for yaw servo (horizontal movement)
+        """
+        self.port = port
+        self.baud_rate = baud_rate
+        self.pitch_id = pitch_id
+        self.yaw_id = yaw_id
+        
+        # Initialize connectors for both servos
+        self.pitch_connector = XL430W250TConnector(
+            device=port, 
+            baud_rate=baud_rate, 
+            dynamixel_id=pitch_id
+        )
+        self.yaw_connector = XL430W250TConnector(
+            device=port, 
+            baud_rate=baud_rate, 
+            dynamixel_id=yaw_id
+        )
+        
+        # Create motor objects for high-level control
+        self.pitch_motor = None
+        self.yaw_motor = None
+        self.connected = False
+    
+    def connect(self):
+        """Connect to both servos."""
+        try:
+            self.pitch_connector.connect()
+            self.yaw_connector.connect()
+            
+            self.pitch_motor = Motor(self.pitch_connector)
+            self.yaw_motor = Motor(self.yaw_connector)
+            
+            self.connected = True
+            return True
+        except Exception as e:
+            self.disconnect()
+            raise Exception(f"Failed to connect to servos: {e}")
+    
+    def disconnect(self):
+        """Disconnect from servos."""
+        try:
+            if self.pitch_connector:
+                self.pitch_connector.disconnect()
+        except:
+            pass
+        try:
+            if self.yaw_connector:
+                self.yaw_connector.disconnect()
+        except:
+            pass
+        self.connected = False
+    
+    def enable_torque(self, enable=True):
+        """Enable or disable torque for both servos."""
+        if not self.connected:
+            raise RuntimeError("Not connected to servos")
+        
+        self.pitch_motor.torque_enabled = enable
+        self.yaw_motor.torque_enabled = enable
+    
+    def get_positions(self):
+        """Get current positions of both servos in radians.
+        
+        Returns:
+            tuple: (pitch_position, yaw_position) in radians
+        """
+        if not self.connected:
+            raise RuntimeError("Not connected to servos")
+        
+        # Read positions (dynamixel-api returns positions in Dynamixel units 0-4095)
+        pitch_units = self.pitch_motor.current_position
+        yaw_units = self.yaw_motor.current_position
+        
+        # Convert from Dynamixel units to radians
+        # 4096 units = 360° = 2π radians
+        pitch_rad = pitch_units * 2 * np.pi / 4096
+        yaw_rad = yaw_units * 2 * np.pi / 4096
+        
+        return (pitch_rad, yaw_rad)
+    
+    def set_positions(self, pitch_rad, yaw_rad):
+        """Set target positions for both servos.
+        
+        Args:
+            pitch_rad: Target pitch position in radians
+            yaw_rad: Target yaw position in radians
+        """
+        if not self.connected:
+            raise RuntimeError("Not connected to servos")
+        
+        # Convert from radians to Dynamixel units (integers)
+        # 2π radians = 4096 units
+        pitch_units = int(pitch_rad * 4096 / (2 * np.pi))
+        yaw_units = int(yaw_rad * 4096 / (2 * np.pi))
+        
+        # Clamp to valid range (0-4095)
+        pitch_units = max(0, min(4095, pitch_units))
+        yaw_units = max(0, min(4095, yaw_units))
+        
+        # Set goal positions (dynamixel-api requires integer units)
+        self.pitch_motor.goal_position = pitch_units
+        self.yaw_motor.goal_position = yaw_units
+    
+    def is_moving(self):
+        """Check if either servo is currently moving.
+        
+        Returns:
+            bool: True if any servo is moving
+        """
+        if not self.connected:
+            return False
+        
+        # Check if motors are moving
+        pitch_moving = self.pitch_connector.read_field("moving")
+        yaw_moving = self.yaw_connector.read_field("moving")
+        
+        return pitch_moving or yaw_moving
+    
+    def __enter__(self):
+        """Context manager entry."""
+        self.connect()
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit."""
+        self.disconnect()
 
 # Configure logging
 def setup_logging(verbose=False):
@@ -64,8 +204,8 @@ def main():
 
     # Use the current servo positions as fixed starting positions
     # These positions were read when the servos were properly positioned for the camera
-    START_PITCH_DEG = 143.96  # Servo ID 1 - vertical movement (pitch) 
-    START_YAW_DEG = 94.75     # Servo ID 2 - horizontal movement (yaw)
+    START_PITCH_DEG = -1.58   # Servo ID 1 - vertical movement (pitch) - Updated after manual positioning
+    START_YAW_DEG = 91.05     # Servo ID 2 - horizontal movement (yaw)
     
     # Convert to radians for servo commands
     start_pitch_rad = np.deg2rad(START_PITCH_DEG)
@@ -85,24 +225,33 @@ def main():
 
     # Initialize Dynamixel servo controller for the active camera platform
     try:
-        agent = DynamixelAgent(port=args.port, start_joints=start_joints)
+        # Create camera controller using dynamixel-api
+        camera_controller = ActiveCameraController(
+            port=args.port,
+            baud_rate=2000000,  # 2Mbps for XL430-W250-T
+            pitch_id=1,         # Servo ID 1 for pitch (vertical)
+            yaw_id=2           # Servo ID 2 for yaw (horizontal)
+        )
+        
+        # Connect to servos
+        camera_controller.connect()
+        logger.info(f"Connected to servos on port {args.port}")
         
         # Read current positions
-        current_joints = agent._robot.get_joint_state()
-        current_pitch_deg = np.rad2deg(current_joints[0])
-        current_yaw_deg = np.rad2deg(current_joints[1])
+        current_pitch_rad, current_yaw_rad = camera_controller.get_positions()
+        current_pitch_deg = np.rad2deg(current_pitch_rad)
+        current_yaw_deg = np.rad2deg(current_yaw_rad)
         logger.info(f"Current servo positions - Pitch: {current_pitch_deg:.2f}°, Yaw: {current_yaw_deg:.2f}°")
         
         # Enable torque
-        agent._robot.set_torque_mode(True)
+        camera_controller.enable_torque(True)
         logger.info("Torque enabled")
         
         # Move to starting position slowly and safely
         logger.info(f"Moving to starting position - Pitch: {START_PITCH_DEG}°, Yaw: {START_YAW_DEG}°")
-        agent._robot.command_joint_state(start_joints)
+        camera_controller.set_positions(start_pitch_rad, start_yaw_rad)
         time.sleep(2.0)  # Wait for servos to reach position
         
-        logger.info(f"Dynamixel controller initialized on port {args.port}")
         logger.info("Servos positioned at starting position and ready for head tracking control")
     except Exception as e:
         logger.error(f"Failed to initialize Dynamixel controller: {e}")
@@ -189,7 +338,7 @@ def main():
             
             try:
                 # Send commands to Dynamixel servos to move the camera
-                agent._robot.command_joint_state(target_joints)
+                camera_controller.set_positions(target_pitch_rad, target_yaw_rad)
             except Exception as e:
                 logger.warning(f"Failed to command servos: {e}")
             
@@ -221,7 +370,11 @@ def main():
         logger.error(f"Unexpected error: {e}")
     finally:
         # Clean up resources
-        agent._robot.set_torque_mode(False)
+        try:
+            camera_controller.enable_torque(False)
+            camera_controller.disconnect()
+        except:
+            pass
         cv2.destroyAllWindows()
         tv_img_shm.close()
         tv_img_shm.unlink()
