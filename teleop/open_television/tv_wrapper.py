@@ -68,8 +68,11 @@ under (basis) Robot Convention, hand's initial pose convention:
 logger = logging.getLogger('tv_wrapper')
 
 class TeleVisionWrapper:
-    def __init__(self, binocular, img_shape, img_shm_name, ngrok):
-        self.tv = TeleVision(binocular, img_shape, img_shm_name, ngrok=ngrok)
+    def __init__(self, binocular, img_shape, img_shm_name, wrist_img_shape=None, wrist_img_shm_name=None, ngrok=False):
+        if wrist_img_shape is not None and wrist_img_shm_name is not None:
+            self.tv = TeleVision(binocular, img_shape, img_shm_name, wrist_img_shape, wrist_img_shm_name, ngrok=ngrok)
+        else:
+            self.tv = TeleVision(binocular, img_shape, img_shm_name, ngrok=ngrok)
         self.logger = logging.getLogger('tv_wrapper.TeleVisionWrapper')
         self.frame_counter = 0
 

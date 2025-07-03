@@ -145,7 +145,10 @@ if __name__ == '__main__':
     logger.info("Image receive thread started")
 
     # television: obtain hand pose data from the XR device and transmit the robot's head camera image to the XR device.
-    tv_wrapper = TeleVisionWrapper(BINOCULAR, tv_img_shape, tv_img_shm.name, ngrok=True) # True for quest3
+    if WRIST:
+        tv_wrapper = TeleVisionWrapper(BINOCULAR, tv_img_shape, tv_img_shm.name, wrist_img_shape, wrist_img_shm.name, ngrok=True) # True for quest3
+    else:
+        tv_wrapper = TeleVisionWrapper(BINOCULAR, tv_img_shape, tv_img_shm.name, ngrok=True) # True for quest3
     logger.info("TeleVision wrapper initialized")
 
     # arm
