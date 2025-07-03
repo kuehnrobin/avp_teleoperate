@@ -3,6 +3,7 @@ from teleop.open_television.television import TeleVision
 from teleop.open_television.constants import *
 from teleop.utils.mat_tool import mat_update, fast_mat_inv
 import logging
+from scipy.spatial.transform import Rotation as R
 
 """
 (basis) OpenXR Convention : y up, z back, x right. 
@@ -72,6 +73,13 @@ class TeleVisionWrapper:
         self.tv = TeleVision(binocular, img_shape, img_shm_name, ngrok=ngrok)
         self.logger = logging.getLogger('tv_wrapper.TeleVisionWrapper')
         self.frame_counter = 0
+
+    def get_head_orientation(self):
+        """Get head orientation as a quaternion."""
+        head_rmat, _, _, _, _ = self.get_data()
+        if head_rmat is not None:
+            return R.from_matrix(head_rmat).as_quat()
+        return None
 
     def get_data(self):
         """Get hand pose data from vuer and process it."""

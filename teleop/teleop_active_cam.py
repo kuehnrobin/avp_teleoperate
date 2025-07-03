@@ -195,7 +195,7 @@ def main():
     parser.add_argument('--port', type=str, default="/dev/ttyUSB0", help="Serial port for the Dynamixel servo controller")
     parser.add_argument('--verbose', action='store_true', help='Enable verbose logging')
     parser.add_argument('--safe-mode', action='store_true', default=True, help='Enable safe mode with limited movement')
-    parser.add_argument('--max-movement', type=float, default=10.0, help='Maximum movement in degrees from start position')
+    parser.add_argument('--max-movement', type=float, default=2.0, help='Maximum movement in degrees from start position (default: 2.0° for safety)')
     args = parser.parse_args()
 
     # Setup logging
@@ -204,8 +204,8 @@ def main():
 
     # Use the current servo positions as fixed starting positions
     # These positions were read when the servos were properly positioned for the camera
-    START_PITCH_DEG = -1.58   # Servo ID 1 - vertical movement (pitch) - Updated after manual positioning
-    START_YAW_DEG = 91.05     # Servo ID 2 - horizontal movement (yaw)
+    START_PITCH_DEG = 0.0   # Servo ID 1 - vertical movement (pitch) - Updated after manual positioning
+    START_YAW_DEG = 90.0    # Servo ID 2 - horizontal movement (yaw)
     
     # Convert to radians for servo commands
     start_pitch_rad = np.deg2rad(START_PITCH_DEG)
@@ -217,7 +217,7 @@ def main():
     # Safety limits (in degrees from start position)
     max_movement_deg = args.max_movement
     if args.safe_mode:
-        max_movement_deg = min(max_movement_deg, 5.0)  # Extra conservative in safe mode
+        max_movement_deg = min(max_movement_deg, 1.0)  # Ultra conservative: max 1° in safe mode
         logger.info(f"Safe mode enabled - limiting movement to ±{max_movement_deg}° from start position")
     
     logger.info(f"Starting positions - Pitch: {START_PITCH_DEG}°, Yaw: {START_YAW_DEG}°")
@@ -315,9 +315,9 @@ def main():
             head_pitch, head_yaw = euler_angles[0], euler_angles[1]
             
             # Apply scaling to reduce sensitivity and convert to movement relative to start position
-            pitch_movement_deg = head_pitch * 0.3  # Scale down head movement
-            yaw_movement_deg = head_yaw * 0.3      # Scale down head movement
-            
+            pitch_movement_deg = head_pitch * 0.1  # Very gentle scaling to avoid cable damage
+            yaw_movement_deg = head_yaw * 0.1      # Very gentle scaling to avoid cable damage
+            logger.debug(f"pitch_raw_target: {pitch_movement_deg:.2f}°, yaw_target: {yaw_movement_deg:.2f}°")
             # Apply safety limits (movement from start position)
             pitch_movement_deg = np.clip(pitch_movement_deg, -max_movement_deg, max_movement_deg)
             yaw_movement_deg = np.clip(yaw_movement_deg, -max_movement_deg, max_movement_deg)
