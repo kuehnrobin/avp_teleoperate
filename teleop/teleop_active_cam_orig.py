@@ -23,6 +23,7 @@ sys.path.append(parent_dir)
 from teleop.open_television.tv_wrapper import TeleVisionWrapper
 from teleop.image_server.image_client import ImageClient
 from teleop.robot_control.dynamixel.active_cam import DynamixelAgent
+from teleop.robot_control.dynamixel.error_analyzer import DynamixelErrorAnalyzer
 
 class ActiveCameraController:
     """Controller for the active camera servo system using DynamixelAgent."""
@@ -41,15 +42,57 @@ class ActiveCameraController:
         
         # Starting positions in radians (safe positions: pitch=-175.08°, yaw=86.04°)
         # self.start_positions = np.array([-1.58 * np.pi / 180, 91.05 * np.pi / 180])
-        self.start_positions = np.array([-175.08 * np.pi / 180, 86.04 * np.pi / 180])
+        self.start_positions = np.array([180.0 * np.pi / 180, 90.0 * np.pi / 180])
         
         # Initialize DynamixelAgent
         self.agent = None
         self.connected = False
+        
+        # Initialize error analyzer
+        self.error_analyzer = DynamixelErrorAnalyzer(port=self.port)
     
+    def analyze_servo_errors(self):
+        """Analyze servo errors using the error analyzer."""
+        try:
+            print("\n" + "="*60)
+            print("RUNNING SERVO ERROR ANALYSIS...")
+            print("="*60)
+            
+            analysis = self.error_analyzer.analyze_system([self.pitch_id, self.yaw_id])
+            self.error_analyzer.print_analysis_report(analysis)
+            
+            return analysis
+        except Exception as e:
+            logging.error(f"Error during servo analysis: {e}")
+            return None
+
     def connect(self):
         """Connect to servos using DynamixelAgent."""
         try:
+            # First, run error analysis to check servo health
+            print("Checking servo health before connection...")
+            servo_analysis = self.analyze_servo_errors()
+            
+            # Check if servos are responding
+            if servo_analysis:
+                failed_servos = []
+                for servo_id, servo_data in servo_analysis.get('servos', {}).items():
+                    if not servo_data.get('communication_ok', False):
+                        failed_servos.append(servo_id)
+                
+                if failed_servos:
+                    error_msg = f"Servos {failed_servos} are not responding. Check connections and power."
+                    logging.error(error_msg)
+                    print(f"\n❌ ERROR: {error_msg}")
+                    print("Please check:")
+                    print("  1. Servo power supply (12V)")
+                    print("  2. USB cable connections")
+                    print("  3. U2D2 interface")
+                    print("  4. Run reduce_latency.sh script")
+                    raise RuntimeError(error_msg)
+                else:
+                    print("✅ All servos responding normally")
+            
             self.agent = DynamixelAgent(port=self.port, start_joints=self.start_positions)
             self.agent._robot.set_torque_mode(True)
             self.connected = True
@@ -264,27 +307,24 @@ def main():
         
         # Get the initial head rotation to use as a reference
         initial_head_rotation = R.from_quat(tv_wrapper.get_head_orientation())
-        logger.info("Initial head rotation captured. Press 'r' to start teleoperation.")
-
-        # Wait for the user to press 'r' to start
+        logger.info("Initial head rotation captured.")
+        
+        # Wait for user input in terminal to start teleoperation
+        print("\n" + "="*60)
+        print("ACTIVE CAMERA TELEOPERATION READY")
+        print("="*60)
+        print("Press 'r' and ENTER to start teleoperation, or 'q' and ENTER to quit:")
+        
         while True:
-            # Display the camera feed with a prompt
-            frame = tv_img_array.copy()
-            prompt_text = "Press 'r' to start teleoperation"
-            font = cv2.FONT_HERSHEY_SIMPLEX
-            text_size = cv2.getTextSize(prompt_text, font, 1, 2)[0]
-            text_x = (frame.shape[1] - text_size[0]) // 2
-            text_y = (frame.shape[0] + text_size[1]) // 2
-            cv2.putText(frame, prompt_text, (text_x, text_y), font, 1, (0, 255, 0), 2)
-            cv2.imshow('Active Camera Teleop', frame)
-            
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord('r'):
-                logger.info("'r' pressed, starting teleoperation.")
+            user_input = input().strip().lower()
+            if user_input == 'r':
+                logger.info("Starting teleoperation...")
                 break
-            elif key == ord('q'):
-                logger.info("'q' pressed, shutting down before start.")
+            elif user_input == 'q':
+                logger.info("Shutdown requested by user")
                 raise KeyboardInterrupt("Shutdown requested by user")
+            else:
+                print("Invalid input. Press 'r' to start or 'q' to quit:")
 
         while True:
             # Get current head rotation
@@ -331,8 +371,34 @@ def main():
             if args.verbose:
                 logger.debug(f"Target (deg): Pitch={np.rad2deg(target_pitch_rad):.2f}, Yaw={np.rad2deg(target_yaw_rad):.2f}")
 
-            # Display the camera feed
-            cv2.imshow('Active Camera Teleop', tv_img_array)
+            # Display the camera feed with overlay information
+            frame = tv_img_array.copy()
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 0.6
+            color = (0, 255, 0)  # Green
+            thickness = 2
+            
+            # Display current head angles
+            head_text = f"Head: Pitch={pitch_delta_deg:.1f}° Yaw={yaw_delta_deg:.1f}°"
+            cv2.putText(frame, head_text, (10, 30), font, font_scale, color, thickness)
+            
+            # Display target servo angles
+            target_text = f"Target: Pitch={np.rad2deg(target_pitch_rad):.1f}° Yaw={np.rad2deg(target_yaw_rad):.1f}°"
+            cv2.putText(frame, target_text, (10, 60), font, font_scale, color, thickness)
+            
+            # Display movement limits
+            limits_text = f"Limits: ±{args.max_movement:.1f}° from start"
+            cv2.putText(frame, limits_text, (10, 90), font, font_scale, (255, 255, 0), thickness)
+            
+            # Display current servo positions if available
+            try:
+                current_positions = camera_controller.get_positions()
+                current_text = f"Current: Pitch={np.rad2deg(current_positions[0]):.1f}° Yaw={np.rad2deg(current_positions[1]):.1f}°"
+                cv2.putText(frame, current_text, (10, 120), font, font_scale, (255, 0, 255), thickness)
+            except:
+                pass  # Don't display if reading positions fails
+            
+            cv2.imshow('Active Camera Teleop', frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 logger.info("'q' pressed, shutting down.")
                 break

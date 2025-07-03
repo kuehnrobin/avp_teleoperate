@@ -76,7 +76,7 @@ class ActiveCameraController:
         self.yaw_id = yaw_id
         
         # Corrected starting positions in radians (Pitch: -175.08°, Yaw: 86.04°)
-        self.start_positions = np.array([-175.08 * np.pi / 180, 86.04 * np.pi / 180])
+        self.start_positions = np.array([180.0 * np.pi / 180, 90.0 * np.pi / 180])
         
         # Initialize DynamixelAgent
         self.agent = None
