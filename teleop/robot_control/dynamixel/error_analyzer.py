@@ -69,7 +69,7 @@ class DynamixelErrorAnalyzer:
         0x07: "Access Error"
     }
     
-    def __init__(self, port: str = None, port_name: str = None, baudrate: int = 57600, protocol_version: float = 2.0):
+    def __init__(self, port: str = None, port_name: str = None, baudrate: int = 2000000, protocol_version: float = 2.0):
         """Initialize the error analyzer.
         
         Args:
@@ -466,7 +466,7 @@ def main():
     parser.add_argument('--port', type=str, 
                        default="/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT3R4A5A-if00-port0",
                        help="Serial port for Dynamixel communication")
-    parser.add_argument('--baudrate', type=int, default=57600, help="Communication baudrate")
+    parser.add_argument('--baudrate', type=int, default=2000000, help="Communication baudrate")
     parser.add_argument('--servo-ids', type=int, nargs='+', default=[1, 2], 
                        help="Servo IDs to analyze")
     parser.add_argument('--verbose', action='store_true', help="Enable verbose logging")

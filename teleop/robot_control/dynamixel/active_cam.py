@@ -48,10 +48,10 @@ PORT_CONFIG_MAP: Dict[str, DynamixelRobotConfig] = {
     "/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT3R4A5A-if00-port0": DynamixelRobotConfig(
         joint_ids=(1, 2),
         joint_offsets=(
-            2*np.pi/2, 
-            2*np.pi/2, 
+            0,  # No offset for servo 1 (pitch) - using raw position
+            np.pi,  # π offset for servo 2 (yaw) to convert from 90° to -90° TODO: Dose this change make problems
         ),
-        joint_signs=(-1, -1),
+        joint_signs=(1, 1),  # Positive sign for servo 1, negative for servo 2
         gripper_config=None,
     ),
 }

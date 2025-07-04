@@ -94,7 +94,12 @@ class ActiveCameraController:
                     print("✅ All servos responding normally")
             
             self.agent = DynamixelAgent(port=self.port, start_joints=self.start_positions)
+            
+            # Enable torque
+            print("Enabling servo torque...")
             self.agent._robot.set_torque_mode(True)
+            
+            # Now that we're connected, mark as connected
             self.connected = True
             logging.info(f"Connected to active camera servos on {self.port}")
             
@@ -148,9 +153,16 @@ class ActiveCameraController:
         try:
             # Command joint state with [pitch, yaw] in radians
             target_positions = [pitch_rad, yaw_rad]
+            
+            # Debug: Check if target positions are reasonable
+            target_deg = [np.rad2deg(pitch_rad), np.rad2deg(yaw_rad)]
+            if target_deg[0] < 0 or target_deg[0] > 360 or target_deg[1] < 0 or target_deg[1] > 360:
+                logging.warning(f"Target positions outside typical servo range: Pitch={target_deg[0]:.1f}°, Yaw={target_deg[1]:.1f}°")
+            
             self.agent._robot.command_joint_state(target_positions)
         except Exception as e:
             logging.error(f"Error setting servo positions: {e}")
+            logging.error(f"Target positions: Pitch={np.rad2deg(pitch_rad):.2f}°, Yaw={np.rad2deg(yaw_rad):.2f}°")
     
     def check_initial_positions(self, tolerance_deg=20.0):
         """
@@ -339,8 +351,8 @@ def main():
             euler_angles = relative_rotation.as_euler('xyz', degrees=True)
             
             # Extract pitch and yaw changes
-            pitch_delta_deg = euler_angles[0]  # Rotation around X-axis
-            yaw_delta_deg = euler_angles[1]    # Rotation around Y-axis
+            pitch_delta_deg = euler_angles[1]  # Rotation around X-axis TODO Testen ob richtige index zuordnung
+            yaw_delta_deg = euler_angles[0]    # Rotation around Y-axis
             
             # Apply a scaling factor to reduce sensitivity
             scaling_factor = 0.1 if args.safe_mode else 0.2
@@ -369,6 +381,8 @@ def main():
             
             # Optional: Log the target positions for debugging
             if args.verbose:
+                current_pitch_rad, current_yaw_rad = camera_controller.get_positions()
+                logger.debug(f"Current (deg): Pitch={np.rad2deg(current_pitch_rad):.2f}, Yaw={np.rad2deg(current_yaw_rad):.2f}")
                 logger.debug(f"Target (deg): Pitch={np.rad2deg(target_pitch_rad):.2f}, Yaw={np.rad2deg(target_yaw_rad):.2f}")
 
             # Display the camera feed with overlay information
