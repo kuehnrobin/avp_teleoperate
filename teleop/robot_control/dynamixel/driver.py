@@ -166,34 +166,36 @@ class DynamixelDriver(DynamixelDriverProtocol):
         if not self._torque_enabled:
             raise RuntimeError("Torque must be enabled to set joint angles")
 
-        for dxl_id, angle in zip(self._ids, joint_angles):
-            # Convert the angle to the appropriate value for the servo
-            position_value = int(angle * 2048 / np.pi)
+        # Use the same lock as the reading thread to prevent communication conflicts
+        with self._lock:
+            for dxl_id, angle in zip(self._ids, joint_angles):
+                # Convert the angle to the appropriate value for the servo
+                position_value = int(angle * 2048 / np.pi)
 
-            # Allocate goal position value into byte array
-            param_goal_position = [
-                DXL_LOBYTE(DXL_LOWORD(position_value)),
-                DXL_HIBYTE(DXL_LOWORD(position_value)),
-                DXL_LOBYTE(DXL_HIWORD(position_value)),
-                DXL_HIBYTE(DXL_HIWORD(position_value)),
-            ]
+                # Allocate goal position value into byte array
+                param_goal_position = [
+                    DXL_LOBYTE(DXL_LOWORD(position_value)),
+                    DXL_HIBYTE(DXL_LOWORD(position_value)),
+                    DXL_LOBYTE(DXL_HIWORD(position_value)),
+                    DXL_HIBYTE(DXL_HIWORD(position_value)),
+                ]
 
-            # Add goal position value to the Syncwrite parameter storage
-            dxl_addparam_result = self._groupSyncWrite.addParam(
-                dxl_id, param_goal_position
-            )
-            if not dxl_addparam_result:
-                raise RuntimeError(
-                    f"Failed to set joint angle for Dynamixel with ID {dxl_id}"
+                # Add goal position value to the Syncwrite parameter storage
+                dxl_addparam_result = self._groupSyncWrite.addParam(
+                    dxl_id, param_goal_position
                 )
+                if not dxl_addparam_result:
+                    raise RuntimeError(
+                        f"Failed to set joint angle for Dynamixel with ID {dxl_id}"
+                    )
 
-        # Syncwrite goal position
-        dxl_comm_result = self._groupSyncWrite.txPacket()
-        if dxl_comm_result != COMM_SUCCESS:
-            raise RuntimeError("Failed to syncwrite goal position")
+            # Syncwrite goal position
+            dxl_comm_result = self._groupSyncWrite.txPacket()
+            if dxl_comm_result != COMM_SUCCESS:
+                raise RuntimeError("Failed to syncwrite goal position")
 
-        # Clear syncwrite parameter storage
-        self._groupSyncWrite.clearParam()
+            # Clear syncwrite parameter storage
+            self._groupSyncWrite.clearParam()
 
     def torque_enabled(self) -> bool:
         return self._torque_enabled

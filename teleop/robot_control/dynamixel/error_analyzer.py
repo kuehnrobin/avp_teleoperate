@@ -83,7 +83,7 @@ class DynamixelErrorAnalyzer:
         self.protocol_version = protocol_version
         
         # Initialize PortHandler and PacketHandler
-        self.port_handler = PortHandler(port_name)
+        self.port_handler = PortHandler(self.port_name)
         self.packet_handler = PacketHandler(protocol_version)
         
         self.logger = logging.getLogger('DynamixelErrorAnalyzer')

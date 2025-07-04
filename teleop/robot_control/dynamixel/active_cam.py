@@ -49,7 +49,7 @@ PORT_CONFIG_MAP: Dict[str, DynamixelRobotConfig] = {
         joint_ids=(1, 2),
         joint_offsets=(
             0,  # No offset for servo 1 (pitch) - using raw position
-            np.pi,  # π offset for servo 2 (yaw) to convert from 90° to -90° TODO: Dose this change make problems
+            0,  # π offset for servo 2 (yaw) to convert from 90° to -90° TODO: Dose this change make problems
         ),
         joint_signs=(1, 1),  # Positive sign for servo 1, negative for servo 2
         gripper_config=None,
