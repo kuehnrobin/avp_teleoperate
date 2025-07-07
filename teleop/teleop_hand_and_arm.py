@@ -7,7 +7,6 @@ import threading
 import logging
 import os
 
-import os 
 import sys
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
@@ -116,8 +115,11 @@ if __name__ == '__main__':
     img_config = {
         'fps': 30,
         'head_camera_type': 'opencv',
-        'head_camera_image_shape': [480, 1280],# [1080, 3840], #[480, 1280],  # Head camera resolution
+        'head_camera_image_shape': [1080, 3840], #[480, 1280],# [1080, 3840], #[480, 1280],  # Head camera resolution
         'head_camera_id_numbers': [6],
+        'active_camera_type': 'opencv',
+        'active_camera_image_shape': [720, 2560], # Resolution of active cam
+        'active_camera_id_numbers': [2],
         'wrist_camera_type': 'opencv',
         'wrist_camera_image_shape': [480, 640],  # Wrist camera resolution
         'wrist_camera_id_numbers': [8, 10],
