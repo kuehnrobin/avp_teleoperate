@@ -36,7 +36,7 @@ def setup_logging(verbose=False):
         level=log_level,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler(os.path.join(log_dir, "teleop.log")),
+            logging.FileHandler(os.path.join(log_dir, "teleop_hand_and_arm.log")),
             logging.StreamHandler()  # Also output to console
         ]
     )
@@ -494,7 +494,7 @@ if __name__ == '__main__':
                         else:
                             # No camera data available
                             states["camera"] = {
-                                "qpos": [0.0, 0.0],
+                                "qpos": [],
                                 "qvel": [],
                                 "torque": []
                             }
@@ -533,7 +533,7 @@ if __name__ == '__main__':
                         else:
                             # No camera data available
                             actions["camera"] = {
-                                "qpos": [0.0, 0.0],
+                                "qpos": [],
                                 "qvel": [],
                                 "torque": []
                             }
