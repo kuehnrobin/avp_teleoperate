@@ -72,7 +72,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--arm', type=str, choices=['G1_29', 'G1_23', 'H1_2', 'H1'], default='G1_29', help='Select arm controller')
     parser.add_argument('--hand', type=str, choices=['dex3', 'gripper', 'inspire1'], help='Select hand controller')
-    parser.add_argument('--retargeting-method', type=str, choices=['vector', 'dexpilot'], default='vector', 
+    parser.add_argument('--retargeting-method', type=str, choices=['vector', 'dexpilot'], default='dexpilot', 
                       help='Select hand retargeting method: vector (default) or dexpilot')
 
     parser.add_argument('--cyclonedds_uri', type=str, default='enxa0cec8616f27', help='Network interface for CycloneDX (default: enxa0cec8616f27)')
