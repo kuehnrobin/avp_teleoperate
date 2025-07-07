@@ -267,8 +267,8 @@ def main():
     parser.add_argument('--port', type=str, default="/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT3R4A5A-if00-port0", 
                        help="Serial port for the Dynamixel servo controller")
     parser.add_argument('--verbose', action='store_true', help='Enable verbose logging')
-    parser.add_argument('--safe-mode', action='store_true', default=True, help='Enable safe mode with limited movement')
-    parser.add_argument('--max-movement', type=float, default=30.0, help='Maximum movement in degrees from start position (default: 30.0° for safety)')
+    parser.add_argument('--safe-mode', action='store_true', default=False, help='Enable safe mode with limited movement')
+    parser.add_argument('--max-movement', type=float, default=60.0, help='Maximum movement in degrees from start position (default: 30.0° for safety)')
     parser.add_argument('--use-opencv', action='store_true', default=True, help='Use OpenCV camera instead of ZED')
     args = parser.parse_args()
 
@@ -349,18 +349,22 @@ def main():
             # Calculate relative rotation from the initial orientation
             relative_rotation = current_head_rotation * initial_head_rotation.inv()
             euler_angles = relative_rotation.as_euler('xyz', degrees=True)
+            if args.verbose:
+                logger.debug(f"Current head rotation (euler angles): {euler_angles}")
             
             # Extract pitch and yaw changes
             pitch_delta_deg = euler_angles[1]  # Rotation around X-axis TODO Testen ob richtige index zuordnung
-            yaw_delta_deg = euler_angles[0]    # Rotation around Y-axis
+            yaw_delta_deg = -euler_angles[2]    # Rotation around Y-axis
             
             # Apply a scaling factor to reduce sensitivity
-            scaling_factor = 0.1 if args.safe_mode else 0.2
+            scaling_factor = 0.1 if args.safe_mode else 1.0
             
             # Calculate the desired total movement from the start position
             pitch_movement_deg = pitch_delta_deg * scaling_factor
             yaw_movement_deg = yaw_delta_deg * scaling_factor
-
+            if args.verbose:
+                logger.debug(f"Pitch delta: {pitch_delta_deg:.2f}°, Yaw delta: {yaw_delta_deg:.2f}°")
+                logger.debug(f"Scaled movements: Pitch={pitch_movement_deg:.2f}°, Yaw={yaw_movement_deg:.2f}°")
             # Calculate the absolute target positions
             target_pitch_rad = start_pitch_rad + np.deg2rad(pitch_movement_deg)
             target_yaw_rad = start_yaw_rad - np.deg2rad(yaw_movement_deg)  # Yaw is inverted
