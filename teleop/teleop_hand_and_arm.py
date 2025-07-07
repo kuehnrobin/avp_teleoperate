@@ -18,7 +18,7 @@ from teleop.robot_control.robot_arm import G1_29_ArmController, G1_23_ArmControl
 from teleop.robot_control.robot_arm_ik import G1_29_ArmIK, G1_23_ArmIK, H1_2_ArmIK, H1_ArmIK
 from teleop.robot_control.robot_hand_unitree import Dex3_1_Controller, Gripper_Controller
 from teleop.robot_control.robot_hand_inspire import Inspire_Controller
-from teleop.robot_control.dynamixel.active_cam import DynamixelAgent
+from teleop.robot_control.active_head_cam import ActiveCameraController
 from teleop.image_server.image_client import ImageClient
 from teleop.utils.episode_writer import EpisodeWriter
 from teleop.utils.pose_logger import PoseLogger
@@ -58,136 +58,8 @@ def setup_logging(verbose=False):
             root_logger.removeHandler(handler)
     root_logger.addHandler(console_handler)
     
-    return logging.getLogger('teleop')
+    return logging.getLogger('teleop_hand_and_arm')
 
-class ActiveCameraController:
-    """Controller for the active camera servo system using DynamixelAgent."""
-    
-    def __init__(self, port="/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT3R4A5A-if00-port0", pitch_id=1, yaw_id=2):
-        """Initialize the camera controller with two servos for pitch and yaw.
-        
-        Args:
-            port: Serial port for the U2D2 interface
-            pitch_id: Dynamixel ID for pitch servo (vertical movement)  
-            yaw_id: Dynamixel ID for yaw servo (horizontal movement)
-        """
-        self.port = port
-        self.pitch_id = pitch_id
-        self.yaw_id = yaw_id
-        
-        # Corrected starting positions in radians (Pitch: -175.08°, Yaw: 86.04°)
-        self.start_positions = np.array([180.0 * np.pi / 180, 90.0 * np.pi / 180])
-        
-        # Initialize DynamixelAgent
-        self.agent = None
-        self.connected = False
-        self.logger = logging.getLogger('ActiveCameraController')
-    
-    def connect(self):
-        """Connect to servos using DynamixelAgent and perform safety checks."""
-        try:
-            self.agent = DynamixelAgent(port=self.port, start_joints=self.start_positions)
-            self.agent._robot.set_torque_mode(True)
-            self.connected = True
-            self.logger.info(f"Connected to active camera servos on {self.port}")
-
-            # Perform safety check on initial positions
-            self.check_initial_positions()
-
-            return True
-        except Exception as e:
-            self.logger.error(f"Failed to connect to servos: {e}")
-            self.disconnect()
-            raise # Re-raise to notify the main script
-
-    def disconnect(self):
-        """Disconnect from servos."""
-        try:
-            if self.agent and hasattr(self.agent, '_robot'):
-                self.agent._robot.set_torque_mode(False)
-                self.logger.info("Disabled servo torque and disconnected")
-        except Exception as e:
-            self.logger.warning(f"Error during disconnect: {e}")
-        finally:
-            self.connected = False
-    
-    def get_positions(self):
-        """Get current positions of both servos in radians.
-        
-        Returns:
-            tuple: (pitch_position, yaw_position) in radians
-        """
-        if not self.connected:
-            return (0.0, 0.0)
-        
-        try:
-            # Get joint state returns [pitch, yaw] in radians
-            positions = self.agent.act({})
-            return tuple(positions)
-        except Exception as e:
-            self.logger.error(f"Error reading servo positions: {e}")
-            raise # Re-raise the exception to be handled by the caller
-
-    def set_positions(self, pitch_rad, yaw_rad):
-        """Set target positions for both servos.
-        
-        Args:
-            pitch_rad: Target pitch position in radians
-            yaw_rad: Target yaw position in radians
-        """
-        if not self.connected:
-            return
-        
-        try:
-            # Command joint state with [pitch, yaw] in radians
-            target_positions = [pitch_rad, yaw_rad]
-            self.agent._robot.command_joint_state(target_positions)
-        except Exception as e:
-            self.logger.error(f"Error setting servo positions: {e}")
-
-    def check_initial_positions(self, tolerance_deg=20.0):
-        """
-        Check if the initial positions of the servos are within a safe tolerance.
-        If not, raises a RuntimeError to stop the script.
-        """
-        if not self.connected:
-            raise RuntimeError("Cannot check initial positions, not connected to servos.")
-
-        self.logger.info("Checking initial servo positions for safety...")
-        
-        try:
-            current_positions_rad = self.get_positions()
-            current_positions_deg = np.rad2deg(current_positions_rad)
-            start_positions_deg = np.rad2deg(self.start_positions)
-
-            pitch_diff = abs(current_positions_deg[0] - start_positions_deg[0])
-            yaw_diff = abs(current_positions_deg[1] - start_positions_deg[1])
-
-            if pitch_diff > tolerance_deg or yaw_diff > tolerance_deg:
-                error_msg = (
-                    f"\n!!! SAFETY ALERT: SERVO POSITION OUT OF TOLERANCE !!!\n"
-                    f"Initial servo position deviates by more than {tolerance_deg}° from the expected start.\n"
-                    f"------------------------------------------------------------------------------------\n"
-                    f"Pitch Servo (ID {self.pitch_id}):\n"
-                    f"  - Current Position: {current_positions_deg[0]:.2f}°\n"
-                    f"  - Expected Start:   {start_positions_deg[0]:.2f}°\n"
-                    f"  - Deviation:        {pitch_diff:.2f}°\n"
-                    f"Yaw Servo (ID {self.yaw_id}):\n"
-                    f"  - Current Position: {current_positions_deg[1]:.2f}°\n"
-                    f"  - Expected Start:   {start_positions_deg[1]:.2f}°\n"
-                    f"  - Deviation:        {yaw_diff:.2f}°\n"
-                    f"------------------------------------------------------------------------------------\n"
-                    f"This may indicate a physical obstruction or a desynchronization. "
-                    f"Please check the hardware before restarting.\n"
-                )
-                self.logger.error(error_msg)
-                raise RuntimeError("Initial servo position check failed. Aborting for safety.")
-            
-            self.logger.info("Initial servo positions are within safe limits. Continuing.")
-
-        except Exception as e:
-            self.logger.error(f"Failed to perform initial position check: {e}")
-            raise
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -214,8 +86,8 @@ if __name__ == '__main__':
     parser.add_argument('--active-camera', action='store_true', help='Enable active camera head tracking')
     parser.add_argument('--camera-port', type=str, default="/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT3R4A5A-if00-port0", 
                        help='Serial port for the active camera servo controller')
-    parser.add_argument('--camera-safe-mode', action='store_true', default=True, help='Enable safe mode with limited camera movement')
-    parser.add_argument('--camera-max-movement', type=float, default=1.0, help='Maximum camera movement in degrees from start position (default: 1.0° for safety)')
+    parser.add_argument('--camera-safe-mode', action='store_true', default=False, help='Enable safe mode with limited camera movement')
+    parser.add_argument('--camera-max-movement', type=float, default=60.0, help='Maximum camera movement in degrees from start position (default: 1.0° for safety)')
     
     # Logging options
     parser.add_argument('--verbose', action='store_true', help='Enable verbose logging')
@@ -314,7 +186,12 @@ if __name__ == '__main__':
     if args.active_camera:
         try:
             logger.info(f"Initializing active camera controller on port: {args.camera_port}")
-            camera_controller = ActiveCameraController(port=args.camera_port)
+            camera_controller = ActiveCameraController(
+                port=args.camera_port,
+                safe_mode=args.camera_safe_mode,
+                max_movement_deg=args.camera_max_movement,
+                logger=logger
+            )
             if camera_controller.connect():
                 logger.info("Active camera controller initialized successfully")
                 # Get initial positions for reference
@@ -367,6 +244,18 @@ if __name__ == '__main__':
             if not args.no_gradual_speed:
                 arm_ctrl.speed_gradual_max()
                 logger.info("Gradual speed increase enabled")
+                
+            # Enable head tracking for active camera if available
+            if camera_controller and camera_controller.connected:
+                try:
+                    logger.info("Enabling head tracking for active camera...")
+                    if camera_controller.enable_head_tracking(tv_wrapper):
+                        logger.info("Head tracking enabled successfully")
+                    else:
+                        logger.warning("Failed to enable head tracking")
+                except Exception as e:
+                    logger.error(f"Error enabling head tracking: {e}")
+            
             running = True
             frame_counter = 0
             
@@ -382,38 +271,14 @@ if __name__ == '__main__':
                 if pose_logger:
                     pose_logger.log_pose(head_rmat, left_wrist, right_wrist, left_hand, right_hand)
                 
-                # Active camera control using head tracking
-                if camera_controller and camera_controller.connected:
+                # Active camera control is now handled by the threaded controller
+                # Just get current servo states for recording if needed
+                camera_servo_states = None
+                if camera_controller and camera_controller.connected and camera_controller.head_tracking_enabled:
                     try:
-                        # Convert head rotation matrix to Euler angles
-                        rotation = R.from_matrix(head_rmat)
-                        euler_angles = rotation.as_euler('xyz', degrees=False)
-                        
-                        # Extract pitch and yaw for camera movement (ignoring roll)
-                        head_pitch = -euler_angles[0]  # Negative for intuitive control
-                        head_yaw = euler_angles[1]
-                        
-                        # Apply movement scaling and safety limits
-                        max_movement_rad = np.radians(args.camera_max_movement)
-                        initial_pitch, initial_yaw = camera_controller.start_positions
-                        
-                        if args.camera_safe_mode:
-                            # Apply scaling and limits for safe operation
-                            target_pitch = np.clip(initial_pitch + head_pitch * 0.3, 
-                                                 initial_pitch - max_movement_rad, 
-                                                 initial_pitch + max_movement_rad)
-                            target_yaw = np.clip(initial_yaw + head_yaw * 0.3, 
-                                               initial_yaw - max_movement_rad, 
-                                               initial_yaw + max_movement_rad)
-                        else:
-                            target_pitch = initial_pitch + head_pitch * 0.5
-                            target_yaw = initial_yaw + head_yaw * 0.5
-                        
-                        # Send commands to camera servos
-                        camera_controller.set_positions(target_pitch, target_yaw)
-                        
+                        camera_servo_states = camera_controller.get_servo_states()
                     except Exception as e:
-                        logger.warning(f"Active camera control error: {e}")
+                        logger.warning(f"Error reading active camera servo states: {e}")
 
                 # send hand skeleton data to hand_ctrl.control_process
                 if args.hand:
@@ -564,6 +429,19 @@ if __name__ == '__main__':
                         left_arm_torque = []
                         right_arm_torque = []
                     
+                    # Active camera servo data
+                    if camera_servo_states:
+                        camera_current_pitch = camera_servo_states['current_pitch']
+                        camera_current_yaw = camera_servo_states['current_yaw']
+                        camera_target_pitch = camera_servo_states['target_pitch']
+                        camera_target_yaw = camera_servo_states['target_yaw']
+                    else:
+                        # No camera data available
+                        camera_current_pitch = 0.0
+                        camera_current_yaw = 0.0
+                        camera_target_pitch = 0.0
+                        camera_target_yaw = 0.0
+                    
                     # Note: Hand torque and velocity values are already collected above in the hand-specific sections
 
                     if recording:
@@ -607,21 +485,19 @@ if __name__ == '__main__':
                         }
                         
                         # Add camera servo states if active camera is enabled
-                        if camera_controller and camera_controller.connected:
-                            try:
-                                camera_pitch, camera_yaw = camera_controller.get_positions()
-                                states["camera"] = {
-                                    "qpos": [camera_pitch, camera_yaw],  # [pitch, yaw] in radians
-                                    "qvel": [],  # Velocity not available
-                                    "torque": []  # Torque not available
-                                }
-                            except Exception as e:
-                                logger.warning(f"Failed to record camera servo positions: {e}")
-                                states["camera"] = {
-                                    "qpos": [0.0, 0.0],
-                                    "qvel": [],
-                                    "torque": []
-                                }
+                        if args.active_camera and camera_servo_states:
+                            states["camera"] = {
+                                "qpos": [camera_current_pitch, camera_current_yaw],  # Current positions in radians
+                                "qvel": [],  # Velocity not available
+                                "torque": []  # Torque not available
+                            }
+                        else:
+                            # No camera data available
+                            states["camera"] = {
+                                "qpos": [0.0, 0.0],
+                                "qvel": [],
+                                "torque": []
+                            }
                         
                         actions = { # Todo torque und pressure auch als action? Laut Paper bi-ACT schon.
                             "left_arm": {                                   
@@ -648,22 +524,19 @@ if __name__ == '__main__':
                         }
                         
                         # Add camera servo actions if active camera is enabled
-                        if camera_controller and camera_controller.connected:
-                            try:
-                                # Use the same target positions as the current positions since we don't track actions separately
-                                camera_pitch, camera_yaw = camera_controller.get_positions()
-                                actions["camera"] = {
-                                    "qpos": [camera_pitch, camera_yaw],  # [pitch, yaw] in radians
-                                    "qvel": [],
-                                    "torque": []
-                                }
-                            except Exception as e:
-                                logger.warning(f"Failed to record camera servo actions: {e}")
-                                actions["camera"] = {
-                                    "qpos": [0.0, 0.0],
-                                    "qvel": [],
-                                    "torque": []
-                                }
+                        if args.active_camera and camera_servo_states:
+                            actions["camera"] = {
+                                "qpos": [camera_target_pitch, camera_target_yaw],  # Target positions in radians
+                                "qvel": [],
+                                "torque": []
+                            }
+                        else:
+                            # No camera data available
+                            actions["camera"] = {
+                                "qpos": [0.0, 0.0],
+                                "qvel": [],
+                                "torque": []
+                            }
                         
                         recorder.add_item(colors=colors, depths=depths, states=states, actions=actions)
 
