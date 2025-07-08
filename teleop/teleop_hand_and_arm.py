@@ -18,6 +18,7 @@ from teleop.robot_control.robot_arm_ik import G1_29_ArmIK, G1_23_ArmIK, H1_2_Arm
 from teleop.robot_control.robot_hand_unitree import Dex3_1_Controller, Gripper_Controller
 from teleop.robot_control.robot_hand_inspire import Inspire_Controller
 from teleop.robot_control.active_head_cam import ActiveCameraController
+from teleop.robot_control.quest_tracking_compensator import QuestTrackingCompensator
 from teleop.image_server.image_client import ImageClient
 from teleop.utils.episode_writer import EpisodeWriter
 from teleop.utils.pose_logger import PoseLogger
@@ -68,13 +69,14 @@ if __name__ == '__main__':
     parser.add_argument('--record', action = 'store_true', help = 'Save data or not')
     parser.add_argument('--no-record', dest = 'record', action = 'store_false', help = 'Do not save data')
     parser.set_defaults(record = False)
-
+    
+    # Robot Configuration
     parser.add_argument('--arm', type=str, choices=['G1_29', 'G1_23', 'H1_2', 'H1'], default='G1_29', help='Select arm controller')
     parser.add_argument('--hand', type=str, choices=['dex3', 'gripper', 'inspire1'], help='Select hand controller')
     parser.add_argument('--retargeting-method', type=str, choices=['vector', 'dexpilot'], default='dexpilot', 
                       help='Select hand retargeting method: vector (default) or dexpilot')
-
     parser.add_argument('--cyclonedds_uri', type=str, default='enxa0cec8616f27', help='Network interface for CycloneDX (default: enxa0cec8616f27)')
+    
     # Speed Limit
     parser.add_argument('--arm-speed', type=float, default=None, 
                       help='Set the arm velocity limit (default is controller-specific)')
@@ -87,6 +89,15 @@ if __name__ == '__main__':
                        help='Serial port for the active camera servo controller')
     parser.add_argument('--camera-safe-mode', action='store_true', default=False, help='Enable safe mode with limited camera movement')
     parser.add_argument('--camera-max-movement', type=float, default=60.0, help='Maximum camera movement in degrees from start position (default: 1.0° for safety)')
+    
+    # Quest Tracking Compensation options
+    parser.add_argument('--quest-compensation', action='store_true', help='Enable Quest 3 tracking compensation')
+    parser.add_argument('--pitch-compensation', type=float, default=0.02, help='Pitch compensation factor (meters per radian, default: 0.02)')
+    parser.add_argument('--yaw-compensation', type=float, default=0.015, help='Yaw compensation factor (meters per radian, default: 0.015)')
+    parser.add_argument('--no-pitch-compensation', action='store_true', help='Disable pitch compensation')
+    parser.add_argument('--no-yaw-compensation', action='store_true', help='Disable yaw compensation')
+    parser.add_argument('--max-pitch-correction', type=float, default=0.05, help='Maximum pitch correction in meters (default: 0.05)')
+    parser.add_argument('--max-yaw-correction', type=float, default=0.05, help='Maximum yaw correction in meters (default: 0.05)')
     
     # Logging options
     parser.add_argument('--verbose', action='store_true', help='Enable verbose logging')
@@ -236,6 +247,27 @@ if __name__ == '__main__':
     else:
         pass
     
+    # Quest tracking compensator
+    quest_compensator = None
+    if args.quest_compensation:
+        try:
+            logger.info(f"Initializing Quest tracking compensator")
+            quest_compensator = QuestTrackingCompensator(
+                pitch_compensation_factor=args.pitch_compensation,
+                yaw_compensation_factor=args.yaw_compensation,
+                enable_pitch_compensation=not args.no_pitch_compensation,
+                enable_yaw_compensation=not args.no_yaw_compensation,
+                max_pitch_correction=args.max_pitch_correction,
+                max_yaw_correction=args.max_yaw_correction,
+                logger=logger
+            )
+            logger.info(f"Quest tracking compensator initialized with "
+                       f"pitch_factor={args.pitch_compensation}, "
+                       f"yaw_factor={args.yaw_compensation}")
+        except Exception as e:
+            logger.error(f"Failed to initialize Quest tracking compensator: {e}")
+            quest_compensator = None
+    
     if args.record:
         recorder = EpisodeWriter(task_dir = args.task_dir, frequency = args.frequency, rerun_log = True)
         recording = False
@@ -268,6 +300,15 @@ if __name__ == '__main__':
                 # Get pose data
                 head_rmat, left_wrist, right_wrist, left_hand, right_hand = tv_wrapper.get_data()
                 frame_counter += 1
+                
+                # Apply Quest tracking compensation if enabled
+                if quest_compensator is not None:
+                    try:
+                        left_wrist, right_wrist = quest_compensator.compensate_wrist_positions(
+                            head_rmat, left_wrist, right_wrist
+                        )
+                    except Exception as e:
+                        logger.warning(f"Error applying Quest tracking compensation: {e}")
                 
                 # Log pose data if enabled
                 if pose_logger:
@@ -315,6 +356,10 @@ if __name__ == '__main__':
                         status_text = "READY TO RECORD"
                         help_text = "Controls: [s]=start recording | [q]=quit (no recording) | [ESC]=quit"
                     
+                    # Add Quest compensator info if enabled
+                    if quest_compensator is not None:
+                        help_text += " | [c]=calibrate Quest"
+                    
                     # Add status text overlay
                     cv2.putText(tv_resized_image, status_text, (10, 30), 
                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255) if recording else (0, 255, 0), 2)
@@ -322,6 +367,12 @@ if __name__ == '__main__':
                     # Add help text overlay
                     cv2.putText(tv_resized_image, help_text, (10, 60), 
                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                else:
+                    # Show Quest compensator info even when not recording
+                    if quest_compensator is not None:
+                        quest_info = f"Quest Compensation: ON | [c]=calibrate"
+                        cv2.putText(tv_resized_image, quest_info, (10, 30), 
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
                 
                 cv2.imshow("record image", tv_resized_image)
                 key = cv2.waitKey(1) & 0xFF
@@ -350,6 +401,11 @@ if __name__ == '__main__':
                         recorder.save_episode(quality=quality)
                         recording = False
                         logger.info(f"Saved recording episode with quality: {quality}")
+                
+                # Handle Quest compensator calibration key
+                if quest_compensator is not None and key == ord('c'):
+                    quest_compensator.calibrate(head_rmat)
+                    logger.info("Quest tracking compensator calibrated to current head position")
 
                 # record data
                 if args.record:
