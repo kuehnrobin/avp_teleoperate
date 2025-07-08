@@ -7,16 +7,23 @@ from collections import deque
 from multiprocessing import shared_memory
 
 class ImageClient:
-    def __init__(self, tv_img_shape = None, tv_img_shm_name = None, wrist_img_shape = None, wrist_img_shm_name = None, 
-                       image_show = False, server_address = "192.168.123.164", port = 5555, Unit_Test = False):
+    def __init__(self, tv_img_shape = None, tv_img_shm_name = None, wrist_img_shape = None, wrist_img_shm_name = None,
+                 recording_img_shape = None, recording_img_shm_name = None, use_active_camera = False,
+                 image_show = False, server_address = "192.168.123.164", port = 5555, Unit_Test = False):
         """
-        tv_img_shape: User's expected head camera resolution shape (H, W, C). It should match the output of the image service terminal.
+        tv_img_shape: User's expected VR display resolution shape (H, W, C). Can be full active camera or cropped head camera.
 
-        tv_img_shm_name: Shared memory is used to easily transfer images across processes to the Vuer.
+        tv_img_shm_name: Shared memory for VR display images.
+        
+        recording_img_shape: Recording resolution shape (H, W, C). Always 480x1280 for dataset compatibility.
+        
+        recording_img_shm_name: Shared memory for recording images.
 
-        wrist_img_shape: User's expected wrist camera resolution shape (H, W, C). It should maintain the same shape as tv_img_shape.
+        wrist_img_shape: User's expected wrist camera resolution shape (H, W, C).
 
         wrist_img_shm_name: Shared memory is used to easily transfer images.
+        
+        use_active_camera: Whether to use active camera (True) or head camera (False).
         
         image_show: Whether to display received images in real time.
 
@@ -31,16 +38,27 @@ class ImageClient:
         self._image_show = image_show
         self._server_address = server_address
         self._port = port
+        self.use_active_camera = use_active_camera
 
         self.tv_img_shape = tv_img_shape
+        self.recording_img_shape = recording_img_shape
         self.wrist_img_shape = wrist_img_shape
 
+        # Set up TV/VR display shared memory
         self.tv_enable_shm = False
         if self.tv_img_shape is not None and tv_img_shm_name is not None:
             self.tv_image_shm = shared_memory.SharedMemory(name=tv_img_shm_name)
             self.tv_img_array = np.ndarray(tv_img_shape, dtype = np.uint8, buffer = self.tv_image_shm.buf)
             self.tv_enable_shm = True
         
+        # Set up recording shared memory
+        self.recording_enable_shm = False
+        if self.recording_img_shape is not None and recording_img_shm_name is not None:
+            self.recording_image_shm = shared_memory.SharedMemory(name=recording_img_shm_name)
+            self.recording_img_array = np.ndarray(recording_img_shape, dtype = np.uint8, buffer = self.recording_image_shm.buf)
+            self.recording_enable_shm = True
+        
+        # Set up wrist shared memory
         self.wrist_enable_shm = False
         if self.wrist_img_shape is not None and wrist_img_shm_name is not None:
             self.wrist_image_shm = shared_memory.SharedMemory(name=wrist_img_shm_name)
@@ -158,9 +176,51 @@ class ImageClient:
                 # Rotate the image by 180 degrees
                 #current_image = cv2.rotate(current_image, cv2.ROTATE_180)
                 
+                # Process TV/VR display images
                 if self.tv_enable_shm:
-                    np.copyto(self.tv_img_array, np.array(current_image[:, :self.tv_img_shape[1]]))
+                    if self.use_active_camera:
+                        # Active camera: use full resolution for VR display
+                        tv_image = current_image
+                    else:
+                        # Head camera: crop and resize for VR display
+                        height, width = current_image.shape[:2]
+                        crop_height = int(height * 0.375)  # Crop to 37.5% of height (3/8)
+                        start_y = (height - crop_height) // 2
+                        cropped_image = current_image[start_y:start_y + crop_height, :]
+                        tv_image = cv2.resize(cropped_image, (self.tv_img_shape[1], self.tv_img_shape[0]))
+                    
+                    # Ensure the image fits the expected shape
+                    if tv_image.shape[:2] != (self.tv_img_shape[0], self.tv_img_shape[1]):
+                        tv_image = cv2.resize(tv_image, (self.tv_img_shape[1], self.tv_img_shape[0]))
+                    
+                    np.copyto(self.tv_img_array, tv_image)
                 
+                # Process recording images at dataset-compatible resolution
+                if self.recording_enable_shm:
+                    if self.use_active_camera:
+                        # Active camera: resize to recording resolution (480x1280 total -> 480x640 per camera)
+                        # Split the image into left and right cameras
+                        height, width = current_image.shape[:2]
+                        left_cam = current_image[:, :width//2]
+                        right_cam = current_image[:, width//2:]
+                        
+                        # Resize each camera to 480x640
+                        left_resized = cv2.resize(left_cam, (640, 480))
+                        right_resized = cv2.resize(right_cam, (640, 480))
+                        
+                        # Concatenate for recording
+                        recording_image = np.concatenate([left_resized, right_resized], axis=1)
+                    else:
+                        # Head camera: crop and resize to recording resolution
+                        height, width = current_image.shape[:2]
+                        crop_height = int(height * 0.375)  # Crop to 37.5% of height (3/8)
+                        start_y = (height - crop_height) // 2
+                        cropped_image = current_image[start_y:start_y + crop_height, :]
+                        recording_image = cv2.resize(cropped_image, (self.recording_img_shape[1], self.recording_img_shape[0]))
+                    
+                    np.copyto(self.recording_img_array, recording_image)
+                
+                # Process wrist camera images
                 if self.wrist_enable_shm:
                     np.copyto(self.wrist_img_array, np.array(current_image[:, -self.wrist_img_shape[1]:]))
                 

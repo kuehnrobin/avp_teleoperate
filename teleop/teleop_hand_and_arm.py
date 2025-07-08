@@ -124,8 +124,21 @@ if __name__ == '__main__':
         'wrist_camera_image_shape': [480, 640],  # Wrist camera resolution
         'wrist_camera_id_numbers': [8, 10],
     }
+    
+    # Configure VR display and recording resolutions based on active camera selection
+    if args.active_camera:
+        # Use active camera for VR headset with full resolution
+        vr_img_shape = (img_config['active_camera_image_shape'][0], img_config['active_camera_image_shape'][1], 3)  # 720x2560 for VR
+        recording_img_shape = (480, 1280, 3)  # 480x1280 for recording (stereo: 480x640 each)
+        logger.info("Using active camera for VR headset with full resolution (720x2560), recording at (480x1280)")
+    else:
+        # Use head camera with current cropped implementation
+        vr_img_shape = (480, 1280, 3)  # Standard head camera resolution for VR (cropped from 1080x3840)
+        recording_img_shape = (480, 1280, 3)  # Same for recording
+        logger.info("Using head camera for VR headset with cropped resolution (480x1280)")
+    
     ASPECT_RATIO_THRESHOLD = 2.0 # If the aspect ratio exceeds this value, it is considered binocular
-    if len(img_config['head_camera_id_numbers']) > 1 or (img_config['head_camera_image_shape'][1] / img_config['head_camera_image_shape'][0] > ASPECT_RATIO_THRESHOLD):
+    if len(img_config['head_camera_id_numbers']) > 1 or (vr_img_shape[1] / vr_img_shape[0] > ASPECT_RATIO_THRESHOLD):
         BINOCULAR = True
     else:
         BINOCULAR = False
@@ -134,22 +147,40 @@ if __name__ == '__main__':
     else:
         WRIST = False
     
-    if BINOCULAR and not (img_config['head_camera_image_shape'][1] / img_config['head_camera_image_shape'][0] > ASPECT_RATIO_THRESHOLD):
-        tv_img_shape = (img_config['head_camera_image_shape'][0], img_config['head_camera_image_shape'][1] * 2, 3)
+    # Set up shared memory for VR display (full resolution or cropped)
+    if BINOCULAR and not (vr_img_shape[1] / vr_img_shape[0] > ASPECT_RATIO_THRESHOLD):
+        tv_img_shape = (vr_img_shape[0], vr_img_shape[1] * 2, 3)
     else:
-        tv_img_shape = (img_config['head_camera_image_shape'][0], img_config['head_camera_image_shape'][1], 3)
+        tv_img_shape = vr_img_shape
 
     tv_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(tv_img_shape) * np.uint8().itemsize)
     tv_img_array = np.ndarray(tv_img_shape, dtype = np.uint8, buffer = tv_img_shm.buf)
+
+    # Set up separate shared memory for recording (always 480x1280 for dataset compatibility)
+    recording_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(recording_img_shape) * np.uint8().itemsize)
+    recording_img_array = np.ndarray(recording_img_shape, dtype = np.uint8, buffer = recording_img_shm.buf)
 
     if WRIST:
         wrist_img_shape = (img_config['wrist_camera_image_shape'][0], img_config['wrist_camera_image_shape'][1] * 2, 3)
         wrist_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(wrist_img_shape) * np.uint8().itemsize)
         wrist_img_array = np.ndarray(wrist_img_shape, dtype = np.uint8, buffer = wrist_img_shm.buf)
-        img_client = ImageClient(tv_img_shape = tv_img_shape, tv_img_shm_name = tv_img_shm.name, 
-                                 wrist_img_shape = wrist_img_shape, wrist_img_shm_name = wrist_img_shm.name)
+        img_client = ImageClient(
+            tv_img_shape = tv_img_shape, 
+            tv_img_shm_name = tv_img_shm.name,
+            recording_img_shape = recording_img_shape,
+            recording_img_shm_name = recording_img_shm.name,
+            wrist_img_shape = wrist_img_shape, 
+            wrist_img_shm_name = wrist_img_shm.name,
+            use_active_camera = args.active_camera
+        )
     else:
-        img_client = ImageClient(tv_img_shape = tv_img_shape, tv_img_shm_name = tv_img_shm.name)
+        img_client = ImageClient(
+            tv_img_shape = tv_img_shape, 
+            tv_img_shm_name = tv_img_shm.name,
+            recording_img_shape = recording_img_shape,
+            recording_img_shm_name = recording_img_shm.name,
+            use_active_camera = args.active_camera
+        )
 
     image_receive_thread = threading.Thread(target = img_client.receive_process, daemon = True)
     image_receive_thread.daemon = True
@@ -409,8 +440,8 @@ if __name__ == '__main__':
                     else:
                         print("No dexterous hand set.")
                         pass
-                    # head image
-                    current_tv_image = tv_img_array.copy()
+                    # head image (use recording resolution for dataset)
+                    current_recording_image = recording_img_array.copy()
                     # wrist image
                     if WRIST:
                         current_wrist_image = wrist_img_array.copy()
@@ -450,13 +481,13 @@ if __name__ == '__main__':
                         colors = {}
                         depths = {}
                         if BINOCULAR:
-                            colors[f"color_{0}"] = current_tv_image[:, :tv_img_shape[1]//2]
-                            colors[f"color_{1}"] = current_tv_image[:, tv_img_shape[1]//2:]
+                            colors[f"color_{0}"] = current_recording_image[:, :recording_img_shape[1]//2]
+                            colors[f"color_{1}"] = current_recording_image[:, recording_img_shape[1]//2:]
                             if WRIST:
                                 colors[f"color_{2}"] = current_wrist_image[:, :wrist_img_shape[1]//2]
                                 colors[f"color_{3}"] = current_wrist_image[:, wrist_img_shape[1]//2:]
                         else:
-                            colors[f"color_{0}"] = current_tv_image
+                            colors[f"color_{0}"] = current_recording_image
                             if WRIST:
                                 colors[f"color_{1}"] = current_wrist_image[:, :wrist_img_shape[1]//2]
                                 colors[f"color_{2}"] = current_wrist_image[:, wrist_img_shape[1]//2:]
@@ -572,6 +603,8 @@ if __name__ == '__main__':
         
         tv_img_shm.unlink()
         tv_img_shm.close()
+        recording_img_shm.unlink()
+        recording_img_shm.close()
         if WRIST:
             wrist_img_shm.unlink()
             wrist_img_shm.close()
