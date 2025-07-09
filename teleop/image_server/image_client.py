@@ -134,6 +134,8 @@ class ImageClient:
     
     def _close(self):
         self._socket.close()
+        if hasattr(self, '_active_socket'):
+            self._active_socket.close()
         self._context.term()
         if self._image_show:
             cv2.destroyAllWindows()
@@ -141,13 +143,21 @@ class ImageClient:
 
     
     def receive_process(self):
+        """Main receive process that handles both single and dual stream modes."""
+        if self.use_active_camera:
+            self._receive_dual_streams()
+        else:
+            self._receive_single_stream()
+
+    def _receive_single_stream(self):
+        """Receive head camera + wrist concatenated stream."""
         # Set up ZeroMQ context and socket
         self._context = zmq.Context()
         self._socket = self._context.socket(zmq.SUB)
         self._socket.connect(f"tcp://{self._server_address}:{self._port}")
         self._socket.setsockopt_string(zmq.SUBSCRIBE, "")
 
-        print("\nImage client has started, waiting to receive data...")
+        print("\n[Image Client] Single stream mode - waiting for head/wrist data...")
         try:
             while self.running:
                 # Receive message
@@ -173,57 +183,32 @@ class ImageClient:
                 if current_image is None:
                     print("[Image Client] Failed to decode image.")
                     continue
-                # Rotate the image by 180 degrees
-                #current_image = cv2.rotate(current_image, cv2.ROTATE_180)
+
+                # Process head camera image (already cropped on server side to 480x1280)
+                height, width = current_image.shape[:2]
                 
-                # Process TV/VR display images
+                # Extract head/wrist parts
+                if self.wrist_enable_shm and width > 1280:
+                    # Image contains both head (480x1280) and wrist cameras
+                    head_image = current_image[:, :1280]  # First 1280 pixels are head
+                    wrist_image = current_image[:, 1280:]  # Remaining pixels are wrist
+                    np.copyto(self.wrist_img_array, wrist_image)
+                else:
+                    # Only head camera
+                    head_image = current_image
+
+                # Copy to VR display
                 if self.tv_enable_shm:
-                    if self.use_active_camera:
-                        # Active camera: use full resolution for VR display
-                        tv_image = current_image
-                    else:
-                        # Head camera: crop and resize for VR display
-                        height, width = current_image.shape[:2]
-                        crop_height = int(height * 0.375)  # Crop to 37.5% of height (3/8)
-                        start_y = (height - crop_height) // 2
-                        cropped_image = current_image[start_y:start_y + crop_height, :]
-                        tv_image = cv2.resize(cropped_image, (self.tv_img_shape[1], self.tv_img_shape[0]))
-                    
-                    # Ensure the image fits the expected shape
-                    if tv_image.shape[:2] != (self.tv_img_shape[0], self.tv_img_shape[1]):
-                        tv_image = cv2.resize(tv_image, (self.tv_img_shape[1], self.tv_img_shape[0]))
-                    
-                    np.copyto(self.tv_img_array, tv_image)
-                
-                # Process recording images at dataset-compatible resolution
+                    if head_image.shape[:2] != (self.tv_img_shape[0], self.tv_img_shape[1]):
+                        head_image = cv2.resize(head_image, (self.tv_img_shape[1], self.tv_img_shape[0]))
+                    np.copyto(self.tv_img_array, head_image)
+
+                # Copy to recording
                 if self.recording_enable_shm:
-                    if self.use_active_camera:
-                        # Active camera: resize to recording resolution (480x1280 total -> 480x640 per camera)
-                        # Split the image into left and right cameras
-                        height, width = current_image.shape[:2]
-                        left_cam = current_image[:, :width//2]
-                        right_cam = current_image[:, width//2:]
-                        
-                        # Resize each camera to 480x640
-                        left_resized = cv2.resize(left_cam, (640, 480))
-                        right_resized = cv2.resize(right_cam, (640, 480))
-                        
-                        # Concatenate for recording
-                        recording_image = np.concatenate([left_resized, right_resized], axis=1)
-                    else:
-                        # Head camera: crop and resize to recording resolution
-                        height, width = current_image.shape[:2]
-                        crop_height = int(height * 0.375)  # Crop to 37.5% of height (3/8)
-                        start_y = (height - crop_height) // 2
-                        cropped_image = current_image[start_y:start_y + crop_height, :]
-                        recording_image = cv2.resize(cropped_image, (self.recording_img_shape[1], self.recording_img_shape[0]))
-                    
-                    np.copyto(self.recording_img_array, recording_image)
-                
-                # Process wrist camera images
-                if self.wrist_enable_shm:
-                    np.copyto(self.wrist_img_array, np.array(current_image[:, -self.wrist_img_shape[1]:]))
-                
+                    if head_image.shape[:2] != (self.recording_img_shape[0], self.recording_img_shape[1]):
+                        head_image = cv2.resize(head_image, (self.recording_img_shape[1], self.recording_img_shape[0]))
+                    np.copyto(self.recording_img_array, head_image)
+
                 if self._image_show:
                     height, width = current_image.shape[:2]
                     resized_image = cv2.resize(current_image, (width // 2, height // 2))
@@ -239,6 +224,118 @@ class ImageClient:
             print("Image client interrupted by user.")
         except Exception as e:
             print(f"[Image Client] An error occurred while receiving data: {e}")
+        finally:
+            self._close()
+
+    def _receive_dual_streams(self):
+        """Receive both full resolution active camera stream and concatenated stream."""
+        # Set up ZeroMQ context and sockets
+        self._context = zmq.Context()
+        
+        # Socket for concatenated stream (port)
+        self._socket = self._context.socket(zmq.SUB)
+        self._socket.connect(f"tcp://{self._server_address}:{self._port}")
+        self._socket.setsockopt_string(zmq.SUBSCRIBE, "")
+        
+        # Socket for full resolution active camera stream (port+1)
+        self._active_socket = self._context.socket(zmq.SUB)
+        self._active_socket.connect(f"tcp://{self._server_address}:{self._port + 1}")
+        self._active_socket.setsockopt_string(zmq.SUBSCRIBE, "")
+
+        # Set up poller for non-blocking receive
+        poller = zmq.Poller()
+        poller.register(self._socket, zmq.POLLIN)
+        poller.register(self._active_socket, zmq.POLLIN)
+
+        print(f"\n[Image Client] Dual stream mode - waiting for active camera (port {self._port + 1}) and concatenated data (port {self._port})...")
+        
+        try:
+            while self.running:
+                # Poll for messages
+                socks = dict(poller.poll(timeout=100))  # 100ms timeout
+                
+                # Handle full resolution active camera stream (for VR display)
+                if self._active_socket in socks:
+                    message = self._active_socket.recv(zmq.NOBLOCK)
+                    receive_time = time.time()
+
+                    if self._enable_performance_eval:
+                        header_size = struct.calcsize('dI')
+                        try:
+                            header = message[:header_size]
+                            jpg_bytes = message[header_size:]
+                            timestamp, frame_id = struct.unpack('dI', header)
+                        except struct.error as e:
+                            print(f"[Image Client] Error unpacking active camera header: {e}")
+                            continue
+                    else:
+                        jpg_bytes = message
+
+                    # Decode full resolution active camera image
+                    np_img = np.frombuffer(jpg_bytes, dtype=np.uint8)
+                    active_image = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
+                    if active_image is not None and self.tv_enable_shm:
+                        # Use full resolution for VR display
+                        if active_image.shape[:2] != (self.tv_img_shape[0], self.tv_img_shape[1]):
+                            active_image = cv2.resize(active_image, (self.tv_img_shape[1], self.tv_img_shape[0]))
+                        np.copyto(self.tv_img_array, active_image)
+
+                # Handle concatenated stream (for recording and wrist cameras)
+                if self._socket in socks:
+                    message = self._socket.recv(zmq.NOBLOCK)
+                    receive_time = time.time()
+
+                    if self._enable_performance_eval:
+                        header_size = struct.calcsize('dI')
+                        try:
+                            header = message[:header_size]
+                            jpg_bytes = message[header_size:]
+                            timestamp, frame_id = struct.unpack('dI', header)
+                        except struct.error as e:
+                            print(f"[Image Client] Error unpacking concatenated header: {e}")
+                            continue
+                    else:
+                        jpg_bytes = message
+
+                    # Decode concatenated image
+                    np_img = np.frombuffer(jpg_bytes, dtype=np.uint8)
+                    concat_image = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
+                    if concat_image is None:
+                        continue
+
+                    height, width = concat_image.shape[:2]
+                    
+                    # Extract downscaled active camera and wrist parts
+                    if self.wrist_enable_shm and width > 1280:
+                        # Image contains both downscaled active camera (480x1280) and wrist cameras
+                        active_downscaled = concat_image[:, :1280]  # First 1280 pixels are downscaled active
+                        wrist_image = concat_image[:, 1280:]  # Remaining pixels are wrist
+                        np.copyto(self.wrist_img_array, wrist_image)
+                    else:
+                        # Only downscaled active camera
+                        active_downscaled = concat_image
+
+                    # Use downscaled active camera for recording
+                    if self.recording_enable_shm:
+                        if active_downscaled.shape[:2] != (self.recording_img_shape[0], self.recording_img_shape[1]):
+                            active_downscaled = cv2.resize(active_downscaled, (self.recording_img_shape[1], self.recording_img_shape[0]))
+                        np.copyto(self.recording_img_array, active_downscaled)
+
+                    if self._image_show:
+                        height, width = concat_image.shape[:2]
+                        resized_image = cv2.resize(concat_image, (width // 2, height // 2))
+                        cv2.imshow('Image Client Concatenated Stream', resized_image)
+                        if cv2.waitKey(1) & 0xFF == ord('q'):
+                            self.running = False
+
+                    if self._enable_performance_eval:
+                        self._update_performance_metrics(timestamp, frame_id, receive_time)
+                        self._print_performance_metrics(receive_time)
+
+        except KeyboardInterrupt:
+            print("Image client interrupted by user.")
+        except Exception as e:
+            print(f"[Image Client] An error occurred while receiving dual streams: {e}")
         finally:
             self._close()
 
