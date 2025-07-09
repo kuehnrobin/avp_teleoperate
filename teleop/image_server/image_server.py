@@ -274,8 +274,12 @@ class ImageServer:
     def send_process(self):
         try:
             while True:
-                # Active camera mode: send full resolution active camera + head/wrist stream
-                self._send_active_camera_streams()
+                if self.active_cameras:
+                    # Active camera mode: send full resolution active camera + head/wrist stream
+                    self._send_active_camera_streams()
+                else:
+                    # Head camera only mode: send head/wrist concatenated stream
+                    self._send_head_camera_stream()
 
                 if self.Unit_Test:
                     current_time = time.time()
