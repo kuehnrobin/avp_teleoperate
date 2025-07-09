@@ -141,6 +141,12 @@ class ImageServer:
         self.head_camera_type = config.get('head_camera_type', 'opencv')
         self.head_image_shape = config.get('head_camera_image_shape', [480, 640])      # (height, width)
         self.head_camera_id_numbers = config.get('head_camera_id_numbers', [0])
+        
+        # Active camera configuration (separate from head camera)
+        self.active_camera_type = config.get('active_camera_type', None)
+        self.active_image_shape = config.get('active_camera_image_shape', [720, 2560])  # (height, width)
+        self.active_camera_id_numbers = config.get('active_camera_id_numbers', None)
+        
 
         self.wrist_camera_type = config.get('wrist_camera_type', None)
         self.wrist_image_shape = config.get('wrist_camera_image_shape', [480, 640])    # (height, width)
@@ -163,6 +169,19 @@ class ImageServer:
         else:
             print(f"[Image Server] Unsupported head_camera_type: {self.head_camera_type}")
 
+        # Initialize active cameras if configured
+        self.active_cameras = []
+        if self.active_camera_type == 'opencv':
+            for device_id in self.active_camera_id_numbers:
+                camera = OpenCVCamera(device_id=device_id, img_shape=self.active_image_shape, fps=self.fps)
+                self.active_cameras.append(camera)
+        elif self.active_camera_type == 'realsense':
+            for serial_number in self.active_camera_id_numbers:
+                camera = RealSenseCamera(img_shape=self.active_image_shape, fps=self.fps, serial_number=serial_number)
+                self.active_cameras.append(camera)
+        else:
+            print(f"[Image Server] Unsupported active_camera_type: {self.active_camera_type}")
+
         # Initialize wrist cameras if provided
         self.wrist_cameras = []
         if self.wrist_camera_type and self.wrist_camera_id_numbers:
@@ -181,6 +200,12 @@ class ImageServer:
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.PUB)
         self.socket.bind(f"tcp://*:{self.port}")
+        
+        # Create second socket for active camera full resolution stream if needed
+        self.active_socket = self.context.socket(zmq.PUB)
+        self.active_socket.bind(f"tcp://*:{self.port + 1}")  # Use port+1 for active camera
+        print(f"[Image Server] Active camera full resolution stream on port {self.port + 1}")
+        print(f"[Image Server] Head/wrist concatenated stream on port {self.port}")
 
         if self.Unit_Test:
             self._init_performance_metrics()
@@ -192,6 +217,14 @@ class ImageServer:
                 print(f"[Image Server] Head camera {cam.serial_number} resolution: {cam.img_shape[0]} x {cam.img_shape[1]}")
             else:
                 print("[Image Server] Unknown camera type in head_cameras.")
+
+        for cam in self.active_cameras:
+            if isinstance(cam, OpenCVCamera):
+                print(f"[Image Server] Active camera {cam.id} resolution: {cam.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)} x {cam.cap.get(cv2.CAP_PROP_FRAME_WIDTH)}")
+            elif isinstance(cam, RealSenseCamera):
+                print(f"[Image Server] Active camera {cam.serial_number} resolution: {cam.img_shape[0]} x {cam.img_shape[1]}")
+            else:
+                print("[Image Server] Unknown camera type in active cameras.")
 
         for cam in self.wrist_cameras:
             if isinstance(cam, OpenCVCamera):
@@ -229,96 +262,20 @@ class ImageServer:
     def _close(self):
         for cam in self.head_cameras:
             cam.release()
+        for cam in self.active_cameras:
+            cam.release()
         for cam in self.wrist_cameras:
             cam.release()
         self.socket.close()
+        self.active_socket.close()
         self.context.term()
         print("[Image Server] The server has been closed.")
 
     def send_process(self):
         try:
             while True:
-                head_frames = []
-                for cam in self.head_cameras:
-                    if self.head_camera_type == 'opencv':
-                        color_image = cam.get_frame()
-                        # Crop the center 480×1280 region
-                        h, w = color_image.shape[:2]          # h=1080, w=3840
-                        half_w = w // 2                        # 1920 pixels per eye
-
-                        # crop height
-                        new_h, new_w = 480, 640
-                        start_y = (h - new_h) // 2            # (1080-480)//2 = 300
-                        #start_y      = h - new_h                    # crop from bottom
-                        # crop center of left eye
-                        start_x_local = (half_w - new_w) // 2  # (1920-1280)//2 = 320
-                        left_crop  = color_image[
-                            start_y:start_y+new_h,
-                            start_x_local:start_x_local+new_w
-                        ]
-
-                        # crop center of right eye
-                        right_crop = color_image[
-                            start_y:start_y+new_h,
-                            half_w + start_x_local : half_w + start_x_local + new_w
-                        ]
-
-                        # stitch them back side by side
-                        color_image = cv2.hconcat([left_crop, right_crop])
-                        #Rotate the image by 180 degrees
-                        color_image = cv2.rotate(color_image, cv2.ROTATE_180)
-                        if color_image is None:
-                            print("[Image Server] Head camera frame read is error.")
-                            break
-                    elif self.head_camera_type == 'realsense':
-                        color_image, depth_iamge = cam.get_frame()
-                        if color_image is None:
-                            print("[Image Server] Head camera frame read is error.")
-                            break
-                    head_frames.append(color_image)
-                if len(head_frames) != len(self.head_cameras):
-                    break
-                head_color = cv2.hconcat(head_frames)
-                
-                if self.wrist_cameras:
-                    wrist_frames = []
-                    for cam in self.wrist_cameras:
-                        if self.wrist_camera_type == 'opencv':
-                            color_image = cam.get_frame()
-                            # Rotate the image by 90 degrees clockwise 
-                            color_image = cv2.rotate(color_image, cv2.ROTATE_180)
-                            if color_image is None:
-                                print("[Image Server] Wrist camera frame read is error.")
-                                break
-                        elif self.wrist_camera_type == 'realsense':
-                            color_image, depth_iamge = cam.get_frame()
-                            if color_image is None:
-                                print("[Image Server] Wrist camera frame read is error.")
-                                break
-                        wrist_frames.append(color_image)
-                    wrist_color = cv2.hconcat(wrist_frames)
-
-                    # Concatenate head and wrist frames
-                    full_color = cv2.hconcat([head_color, wrist_color])
-                else:
-                    full_color = head_color
-
-                ret, buffer = cv2.imencode('.jpg', full_color)
-                if not ret:
-                    print("[Image Server] Frame imencode is failed.")
-                    continue
-
-                jpg_bytes = buffer.tobytes()
-
-                if self.Unit_Test:
-                    timestamp = time.time()
-                    frame_id = self.frame_count
-                    header = struct.pack('dI', timestamp, frame_id)  # 8-byte double, 4-byte unsigned int
-                    message = header + jpg_bytes
-                else:
-                    message = jpg_bytes
-
-                self.socket.send(message)
+                # Active camera mode: send full resolution active camera + head/wrist stream
+                self._send_active_camera_streams()
 
                 if self.Unit_Test:
                     current_time = time.time()
@@ -330,6 +287,136 @@ class ImageServer:
         finally:
             self._close()
 
+    def _send_active_camera_streams(self):
+        """Send active camera at full resolution + head/wrist concatenated stream."""
+        # Get active camera frame at full resolution
+        active_frames = []
+        for cam in self.active_cameras:  # Use actual active cameras
+            if self.active_camera_type == 'opencv':
+                color_image = cam.get_frame()
+                if color_image is None:
+                    print("[Image Server] Active camera frame read is error.")
+                    return
+                # Rotate the image by 180 degrees for active camera
+                color_image = cv2.rotate(color_image, cv2.ROTATE_180)
+                active_frames.append(color_image)
+            elif self.active_camera_type == 'realsense':
+                color_image, depth_image = cam.get_frame()
+                if color_image is None:
+                    print("[Image Server] Active camera frame read is error.")
+                    return
+                active_frames.append(color_image)
+        
+        if len(active_frames) != len(self.active_cameras):
+            return
+        
+        # Concatenate active camera frames and send at full resolution
+        active_full_res = cv2.hconcat(active_frames)
+        
+        # Send full resolution active camera stream on port+1
+        ret, buffer = cv2.imencode('.jpg', active_full_res)
+        if ret:
+            jpg_bytes = buffer.tobytes()
+            if self.Unit_Test:
+                timestamp = time.time()
+                frame_id = self.frame_count
+                header = struct.pack('dI', timestamp, frame_id)
+                message = header + jpg_bytes
+            else:
+                message = jpg_bytes
+            self.active_socket.send(message)
+        
+        # Now send the concatenated head/wrist stream for recording
+        self._send_head_camera_stream()
+
+    def _send_head_camera_stream(self):
+        """Send head camera cropped + wrist concatenated stream."""
+        head_frames = []
+        for cam in self.head_cameras:
+            if self.head_camera_type == 'opencv':
+                color_image = cam.get_frame()
+                if color_image is None:
+                    print("[Image Server] Head camera frame read is error.")
+                    return
+                
+                # Head camera: crop to 480×1280 region
+                h, w = color_image.shape[:2]          # h=1080, w=3840
+                half_w = w // 2                        # 1920 pixels per eye
+
+                # crop height
+                new_h, new_w = 480, 640
+                start_y = (h - new_h) // 2            # (1080-480)//2 = 300
+                start_x_local = (half_w - new_w) // 2  # (1920-640)//2 = 640
+                
+                # crop center of left eye
+                left_crop = color_image[
+                    start_y:start_y+new_h,
+                    start_x_local:start_x_local+new_w
+                ]
+
+                # crop center of right eye
+                right_crop = color_image[
+                    start_y:start_y+new_h,
+                    half_w + start_x_local : half_w + start_x_local + new_w
+                ]
+
+                # stitch them back side by side
+                color_image = cv2.hconcat([left_crop, right_crop])
+                # Rotate the image by 180 degrees for head camera
+                color_image = cv2.rotate(color_image, cv2.ROTATE_180)
+                
+            elif self.head_camera_type == 'realsense':
+                color_image, depth_image = cam.get_frame()
+                if color_image is None:
+                    print("[Image Server] Head camera frame read is error.")
+                    return
+            
+            head_frames.append(color_image)
+        
+        if len(head_frames) != len(self.head_cameras):
+            return
+        
+        head_color = cv2.hconcat(head_frames)
+        
+        # Handle wrist cameras
+        if self.wrist_cameras:
+            wrist_frames = []
+            for cam in self.wrist_cameras:
+                if self.wrist_camera_type == 'opencv':
+                    color_image = cam.get_frame()
+                    color_image = cv2.rotate(color_image, cv2.ROTATE_180)
+                    if color_image is None:
+                        print("[Image Server] Wrist camera frame read is error.")
+                        return
+                elif self.wrist_camera_type == 'realsense':
+                    color_image, depth_image = cam.get_frame()
+                    if color_image is None:
+                        print("[Image Server] Wrist camera frame read is error.")
+                        return
+                wrist_frames.append(color_image)
+            
+            if len(wrist_frames) == len(self.wrist_cameras):
+                wrist_color = cv2.hconcat(wrist_frames)
+                # Concatenate head and wrist frames
+                full_color = cv2.hconcat([head_color, wrist_color])
+            else:
+                full_color = head_color
+        else:
+            full_color = head_color
+
+        # Send concatenated stream
+        ret, buffer = cv2.imencode('.jpg', full_color)
+        if ret:
+            jpg_bytes = buffer.tobytes()
+            if self.Unit_Test:
+                timestamp = time.time()
+                frame_id = self.frame_count
+                header = struct.pack('dI', timestamp, frame_id)
+                message = header + jpg_bytes
+            else:
+                message = jpg_bytes
+            self.socket.send(message)
+
 
 if __name__ == "__main__":
     config = {
@@ -337,6 +424,9 @@ if __name__ == "__main__":
         'head_camera_type': 'opencv',
         'head_camera_image_shape': [1080, 3840], #,[480, 1280], # Head camera resolution
         'head_camera_id_numbers': [6],
+        'active_camera_type': 'opencv',
+        'active_camera_image_shape': [720, 2560], # Resolution of active cam
+        'active_camera_id_numbers': [2],
         'wrist_camera_type': 'opencv',
         'wrist_camera_image_shape': [480, 640],  # Wrist camera resolution
         'wrist_camera_id_numbers': [8, 10],
