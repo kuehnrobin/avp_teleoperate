@@ -186,8 +186,13 @@ class ImageServer:
         self.wrist_cameras = []
         if self.wrist_camera_type and self.wrist_camera_id_numbers:
             if self.wrist_camera_type == 'opencv':
-                for device_id in self.wrist_camera_id_numbers:
-                    camera = OpenCVCamera(device_id=device_id, img_shape=self.wrist_image_shape, fps=self.fps)
+                for i, device_id in enumerate(self.wrist_camera_id_numbers):
+                    # Right wrist camera (index 1) needs swapped dimensions for 90° rotation
+                    if i == 1:  # Right wrist camera
+                        wrist_shape = [self.wrist_image_shape[1], self.wrist_image_shape[0]]  # [640, 480]
+                    else:  # Left wrist camera
+                        wrist_shape = self.wrist_image_shape  # [480, 640]
+                    camera = OpenCVCamera(device_id=device_id, img_shape=wrist_shape, fps=self.fps)
                     self.wrist_cameras.append(camera)
             elif self.wrist_camera_type == 'realsense':
                 for serial_number in self.wrist_camera_id_numbers:
@@ -226,9 +231,10 @@ class ImageServer:
             else:
                 print("[Image Server] Unknown camera type in active cameras.")
 
-        for cam in self.wrist_cameras:
+        for i, cam in enumerate(self.wrist_cameras):
+            camera_side = "Left" if i == 0 else "Right"
             if isinstance(cam, OpenCVCamera):
-                print(f"[Image Server] Wrist camera {cam.id} resolution: {cam.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)} x {cam.cap.get(cv2.CAP_PROP_FRAME_WIDTH)}")
+                print(f"[Image Server] {camera_side} wrist camera {cam.id} resolution: {cam.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)} x {cam.cap.get(cv2.CAP_PROP_FRAME_WIDTH)}")
             elif isinstance(cam, RealSenseCamera):
                 print(f"[Image Server] Wrist camera {cam.serial_number} resolution: {cam.img_shape[0]} x {cam.img_shape[1]}")
             else:
