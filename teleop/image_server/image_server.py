@@ -441,13 +441,13 @@ if __name__ == "__main__":
         'fps': 30,
         'head_camera_type': 'opencv',
         'head_camera_image_shape': [1080, 3840], #,[480, 1280], # Head camera resolution
-        'head_camera_id_numbers': [8],
+        'head_camera_id_numbers': [1],
         'active_camera_type': 'opencv',
         'active_camera_image_shape': [720, 2560], # Resolution of active cam
-        'active_camera_id_numbers': [6],
+        'active_camera_id_numbers': [2],
         'wrist_camera_type': 'opencv',
         'wrist_camera_image_shape': [480, 640],  # Wrist camera resolution
-        'wrist_camera_id_numbers': [12, 10],
+        'wrist_camera_id_numbers': [5, 7],
     }
 
     server = ImageServer(config, Unit_Test=False)
