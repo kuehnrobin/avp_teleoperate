@@ -289,13 +289,20 @@ class ImageClient:
                     np_img = np.frombuffer(jpg_bytes, dtype=np.uint8)
                     active_image = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
                     if active_image is not None:
-                        # Store for shared memory and display
-                        processed_active_image = active_image
+                        # Store for VR display at full resolution
                         if self.tv_enable_shm:
                             # Use full resolution for VR display
                             if active_image.shape[:2] != (self.tv_img_shape[0], self.tv_img_shape[1]):
                                 processed_active_image = cv2.resize(active_image, (self.tv_img_shape[1], self.tv_img_shape[0]))
+                            else:
+                                processed_active_image = active_image
                             np.copyto(self.tv_img_array, processed_active_image)
+                        
+                        # Downscale active camera for recording (480x1280)
+                        if self.recording_enable_shm:
+                            # Downscale from 720x2560 to 480x1280 for recording
+                            active_downscaled = cv2.resize(active_image, (1280, 480))
+                            np.copyto(self.recording_img_array, active_downscaled)
                         
                         # Display active camera in standalone mode
                         if self._image_show:
@@ -334,21 +341,18 @@ class ImageClient:
 
                     height, width = concat_image.shape[:2]
                     
-                    # Extract downscaled active camera and wrist parts
-                    if self.wrist_enable_shm and width > 1280:
-                        # Image contains both downscaled active camera (480x1280) and wrist cameras
-                        active_downscaled = concat_image[:, :1280]  # First 1280 pixels are downscaled active
-                        wrist_image = concat_image[:, 1280:]  # Remaining pixels are wrist
-                        np.copyto(self.wrist_img_array, wrist_image)
-                    else:
-                        # Only downscaled active camera
-                        active_downscaled = concat_image
-
-                    # Use downscaled active camera for recording
-                    if self.recording_enable_shm:
-                        if active_downscaled.shape[:2] != (self.recording_img_shape[0], self.recording_img_shape[1]):
-                            active_downscaled = cv2.resize(active_downscaled, (self.recording_img_shape[1], self.recording_img_shape[0]))
-                        np.copyto(self.recording_img_array, active_downscaled)
+                    # Extract wrist cameras from concatenated stream (head camera is now handled by active camera stream)
+                    if self.wrist_enable_shm:
+                        # In active camera mode, the concatenated stream should contain head + wrist
+                        # But we only need the wrist part since recording image comes from active camera
+                        if width > 1280:
+                            # Image contains both head camera (480x1280) and wrist cameras
+                            wrist_image = concat_image[:, 1280:]  # Remaining pixels are wrist
+                            np.copyto(self.wrist_img_array, wrist_image)
+                        else:
+                            # Fallback: use the whole concatenated image as wrist if no head part
+                            if concat_image.shape[:2] == (self.wrist_img_shape[0], self.wrist_img_shape[1]):
+                                np.copyto(self.wrist_img_array, concat_image)
 
                     if self._image_show:
                         height, width = concat_image.shape[:2]
