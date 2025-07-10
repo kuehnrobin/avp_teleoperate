@@ -9,6 +9,7 @@ from multiprocessing import shared_memory
 class ImageClient:
     def __init__(self, tv_img_shape = None, tv_img_shm_name = None, wrist_img_shape = None, wrist_img_shm_name = None,
                  recording_img_shape = None, recording_img_shm_name = None, use_active_camera = False,
+                 active_camera_img_shape = None, active_camera_img_shm_name = None,
                  image_show = False, server_address = "192.168.123.164", port = 5555, Unit_Test = False):
         """
         tv_img_shape: User's expected VR display resolution shape (H, W, C). Can be full active camera or cropped head camera.
@@ -43,6 +44,7 @@ class ImageClient:
         self.tv_img_shape = tv_img_shape
         self.recording_img_shape = recording_img_shape
         self.wrist_img_shape = wrist_img_shape
+        self.active_camera_img_shape = active_camera_img_shape
 
         # Set up TV/VR display shared memory
         self.tv_enable_shm = False
@@ -64,6 +66,13 @@ class ImageClient:
             self.wrist_image_shm = shared_memory.SharedMemory(name=wrist_img_shm_name)
             self.wrist_img_array = np.ndarray(wrist_img_shape, dtype = np.uint8, buffer = self.wrist_image_shm.buf)
             self.wrist_enable_shm = True
+
+        # Set up active camera shared memory (separate from recording)
+        self.active_camera_enable_shm = False
+        if self.active_camera_img_shape is not None and active_camera_img_shm_name is not None:
+            self.active_camera_image_shm = shared_memory.SharedMemory(name=active_camera_img_shm_name)
+            self.active_camera_img_array = np.ndarray(active_camera_img_shape, dtype = np.uint8, buffer = self.active_camera_image_shm.buf)
+            self.active_camera_enable_shm = True
 
         # Performance evaluation parameters
         self._enable_performance_eval = Unit_Test
@@ -298,11 +307,11 @@ class ImageClient:
                                 processed_active_image = active_image
                             np.copyto(self.tv_img_array, processed_active_image)
                         
-                        # Downscale active camera for recording (480x1280)
-                        if self.recording_enable_shm:
+                        # Downscale active camera for recording and put in separate active camera shared memory
+                        if self.active_camera_enable_shm:
                             # Downscale from 720x2560 to 480x1280 for recording
                             active_downscaled = cv2.resize(active_image, (1280, 480))
-                            np.copyto(self.recording_img_array, active_downscaled)
+                            np.copyto(self.active_camera_img_array, active_downscaled)
                         
                         # Display active camera in standalone mode
                         if self._image_show:
@@ -341,18 +350,37 @@ class ImageClient:
 
                     height, width = concat_image.shape[:2]
                     
-                    # Extract wrist cameras from concatenated stream (head camera is now handled by active camera stream)
-                    if self.wrist_enable_shm:
-                        # In active camera mode, the concatenated stream should contain head + wrist
-                        # But we only need the wrist part since recording image comes from active camera
-                        if width > 1280:
+                    if self.use_active_camera:
+                        # In active camera mode: concatenated stream contains head + wrist, but we only need wrist
+                        # Recording image comes from the separate active camera stream
+                        if self.wrist_enable_shm and width > 1280:
                             # Image contains both head camera (480x1280) and wrist cameras
                             wrist_image = concat_image[:, 1280:]  # Remaining pixels are wrist
                             np.copyto(self.wrist_img_array, wrist_image)
-                        else:
+                        elif self.wrist_enable_shm:
                             # Fallback: use the whole concatenated image as wrist if no head part
                             if concat_image.shape[:2] == (self.wrist_img_shape[0], self.wrist_img_shape[1]):
                                 np.copyto(self.wrist_img_array, concat_image)
+                    else:
+                        # In head camera mode: concatenated stream contains head + wrist, extract both
+                        if self.wrist_enable_shm and width > 1280:
+                            # Image contains both head (480x1280) and wrist cameras
+                            head_image = concat_image[:, :1280]  # First 1280 pixels are head
+                            wrist_image = concat_image[:, 1280:]  # Remaining pixels are wrist
+                            np.copyto(self.wrist_img_array, wrist_image)
+                            
+                            # Put head camera in recording shared memory
+                            if self.recording_enable_shm:
+                                if head_image.shape[:2] != (self.recording_img_shape[0], self.recording_img_shape[1]):
+                                    head_image = cv2.resize(head_image, (self.recording_img_shape[1], self.recording_img_shape[0]))
+                                np.copyto(self.recording_img_array, head_image)
+                        else:
+                            # Only head camera
+                            head_image = concat_image
+                            if self.recording_enable_shm:
+                                if head_image.shape[:2] != (self.recording_img_shape[0], self.recording_img_shape[1]):
+                                    head_image = cv2.resize(head_image, (self.recording_img_shape[1], self.recording_img_shape[0]))
+                                np.copyto(self.recording_img_array, head_image)
 
                     if self._image_show:
                         height, width = concat_image.shape[:2]

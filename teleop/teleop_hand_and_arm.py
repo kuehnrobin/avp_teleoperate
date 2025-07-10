@@ -160,6 +160,14 @@ if __name__ == '__main__':
     recording_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(recording_img_shape) * np.uint8().itemsize)
     recording_img_array = np.ndarray(recording_img_shape, dtype = np.uint8, buffer = recording_img_shm.buf)
 
+    # Set up separate shared memory for active camera (480x1280 for recording)
+    active_camera_img_shm = None
+    active_camera_img_array = None
+    if args.active_camera:
+        active_camera_img_shape = (480, 1280, 3)  # Downscaled active camera for recording
+        active_camera_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(active_camera_img_shape) * np.uint8().itemsize)
+        active_camera_img_array = np.ndarray(active_camera_img_shape, dtype = np.uint8, buffer = active_camera_img_shm.buf)
+
     if WRIST:
         wrist_img_shape = (img_config['wrist_camera_image_shape'][0], img_config['wrist_camera_image_shape'][1] * 2, 3)
         wrist_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(wrist_img_shape) * np.uint8().itemsize)
@@ -171,6 +179,8 @@ if __name__ == '__main__':
             recording_img_shm_name = recording_img_shm.name,
             wrist_img_shape = wrist_img_shape, 
             wrist_img_shm_name = wrist_img_shm.name,
+            active_camera_img_shape = active_camera_img_shape if args.active_camera else None,
+            active_camera_img_shm_name = active_camera_img_shm.name if args.active_camera else None,
             use_active_camera = args.active_camera
         )
     else:
@@ -179,6 +189,8 @@ if __name__ == '__main__':
             tv_img_shm_name = tv_img_shm.name,
             recording_img_shape = recording_img_shape,
             recording_img_shm_name = recording_img_shm.name,
+            active_camera_img_shape = active_camera_img_shape if args.active_camera else None,
+            active_camera_img_shm_name = active_camera_img_shm.name if args.active_camera else None,
             use_active_camera = args.active_camera
         )
 
@@ -442,6 +454,9 @@ if __name__ == '__main__':
                         pass
                     # head image (use recording resolution for dataset)
                     current_recording_image = recording_img_array.copy()
+                    # active camera image (separate from recording)
+                    if args.active_camera and active_camera_img_array is not None:
+                        current_active_camera_image = active_camera_img_array.copy()
                     # wrist image
                     if WRIST:
                         current_wrist_image = wrist_img_array.copy()
@@ -483,8 +498,9 @@ if __name__ == '__main__':
                         
                         if args.active_camera:
                             # Active camera mode: split the downscaled active camera image (480x1280) into left/right (480x640 each)
-                            colors[f"color_{4}"] = current_recording_image[:, :640]   # color_4.jpg - left active camera (480x640)
-                            colors[f"color_{5}"] = current_recording_image[:, 640:]   # color_5.jpg - right active camera (480x640)
+
+                            colors[f"color_{4}"] = current_active_camera_image[:, :640]   # color_4.jpg - left active camera (480x640)
+                            colors[f"color_{5}"] = current_active_camera_image[:, 640:]   # color_5.jpg - right active camera (480x640)
                             
                             # Head camera from recording stream (same as active camera for dataset compatibility)
                             if BINOCULAR:
@@ -624,6 +640,9 @@ if __name__ == '__main__':
         tv_img_shm.close()
         recording_img_shm.unlink()
         recording_img_shm.close()
+        if args.active_camera and active_camera_img_shm:
+            active_camera_img_shm.unlink()
+            active_camera_img_shm.close()
         if WRIST:
             wrist_img_shm.unlink()
             wrist_img_shm.close()
