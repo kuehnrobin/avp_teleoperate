@@ -46,7 +46,7 @@ class ActiveCameraController:
         self.logger = logger or logging.getLogger('ActiveCameraController')
         
         # Starting positions in radians (safe positions)
-        self.start_positions = np.array([160.0 * np.pi / 180, 90.0 * np.pi / 180])
+        self.start_positions = np.array([195.0 * np.pi / 180, 90.0 * np.pi / 180])
         
         # Initialize DynamixelAgent
         self.agent = None
