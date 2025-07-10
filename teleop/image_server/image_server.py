@@ -385,13 +385,17 @@ class ImageServer:
         # Handle wrist cameras
         if self.wrist_cameras:
             wrist_frames = []
-            for cam in self.wrist_cameras:
+            for i, cam in enumerate(self.wrist_cameras):
                 if self.wrist_camera_type == 'opencv':
                     color_image = cam.get_frame()
-                    color_image = cv2.rotate(color_image, cv2.ROTATE_180)
                     if color_image is None:
                         print("[Image Server] Wrist camera frame read is error.")
                         return
+                    # Apply different rotations based on camera index
+                    if i == 0:  # Left wrist camera
+                        color_image = cv2.rotate(color_image, cv2.ROTATE_180)
+                    elif i == 1:  # Right wrist camera
+                        color_image = cv2.rotate(color_image, cv2.ROTATE_90_CLOCKWISE)
                 elif self.wrist_camera_type == 'realsense':
                     color_image, depth_image = cam.get_frame()
                     if color_image is None:

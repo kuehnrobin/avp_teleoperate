@@ -266,9 +266,9 @@ class ImageClient:
                 
                 # Handle full resolution active camera stream (for VR display)
                 if self._active_socket in socks:
-                    active_frame_count += 1
-                    if active_frame_count % 30 == 0:
-                        print(f"[Image Client] Active camera frames received: {active_frame_count}")
+                    #active_frame_count += 1
+                    # if active_frame_count % 30 == 0:
+                    #     print(f"[Image Client] Active camera frames received: {active_frame_count}")
                     
                     message = self._active_socket.recv(zmq.NOBLOCK)
                     receive_time = time.time()
@@ -307,9 +307,9 @@ class ImageClient:
 
                 # Handle concatenated stream (for recording and wrist cameras)
                 if self._socket in socks:
-                    concat_frame_count += 1
-                    if concat_frame_count % 30 == 0:
-                        print(f"[Image Client] Concatenated frames received: {concat_frame_count}")
+                    #concat_frame_count += 1
+                    # if concat_frame_count % 30 == 0:
+                    #     print(f"[Image Client] Concatenated frames received: {concat_frame_count}")
                     
                     message = self._socket.recv(zmq.NOBLOCK)
                     receive_time = time.time()

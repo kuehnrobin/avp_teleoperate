@@ -119,7 +119,7 @@ if __name__ == '__main__':
         'head_camera_id_numbers': [6],
         'active_camera_type': 'opencv',
         'active_camera_image_shape': [720, 2560], # Resolution of active cam
-        'active_camera_id_numbers': [2],
+        'active_camera_id_numbers': [12],
         'wrist_camera_type': 'opencv',
         'wrist_camera_image_shape': [480, 640],  # Wrist camera resolution
         'wrist_camera_id_numbers': [8, 10],
