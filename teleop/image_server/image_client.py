@@ -249,13 +249,27 @@ class ImageClient:
 
         print(f"\n[Image Client] Dual stream mode - waiting for active camera (port {self._port + 1}) and concatenated data (port {self._port})...")
         
+        # Add small delay to allow connections to establish
+        time.sleep(1.0)
+        
+        active_frame_count = 0
+        concat_frame_count = 0
+        
         try:
             while self.running:
-                # Poll for messages
-                socks = dict(poller.poll(timeout=100))  # 100ms timeout
+                # Poll for messages with longer timeout
+                socks = dict(poller.poll(timeout=1000))  # 1 second timeout
+                
+                if not socks:
+                    print("[Image Client] No data received in 1 second, continuing...")
+                    continue
                 
                 # Handle full resolution active camera stream (for VR display)
                 if self._active_socket in socks:
+                    active_frame_count += 1
+                    if active_frame_count % 30 == 0:
+                        print(f"[Image Client] Active camera frames received: {active_frame_count}")
+                    
                     message = self._active_socket.recv(zmq.NOBLOCK)
                     receive_time = time.time()
 
@@ -293,6 +307,10 @@ class ImageClient:
 
                 # Handle concatenated stream (for recording and wrist cameras)
                 if self._socket in socks:
+                    concat_frame_count += 1
+                    if concat_frame_count % 30 == 0:
+                        print(f"[Image Client] Concatenated frames received: {concat_frame_count}")
+                    
                     message = self._socket.recv(zmq.NOBLOCK)
                     receive_time = time.time()
 
@@ -361,5 +379,5 @@ if __name__ == "__main__":
     # example2
     # Initialize the client with performance evaluation enabled
     # client = ImageClient(image_show = True, server_address='127.0.0.1', Unit_Test=True) # local test
-    client = ImageClient(image_show = True, server_address='192.168.123.164', Unit_Test=False) # deployment test
+    client = ImageClient(image_show = True, server_address='192.168.123.164', Unit_Test=False, use_active_camera=True) # deployment test with active camera
     client.receive_process()
