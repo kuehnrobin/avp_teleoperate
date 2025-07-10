@@ -144,7 +144,7 @@ class ImageServer:
         
         # Active camera configuration (separate from head camera)
         self.active_camera_type = config.get('active_camera_type', None)
-        self.active_image_shape = config.get('active_camera_image_shape', [720, 2560])  # (height, width)
+        self.active_image_shape = config.get('active_camera_image_shape', [720, 1280]) #(height, width)
         self.active_camera_id_numbers = config.get('active_camera_id_numbers', None)
         
 
@@ -429,11 +429,11 @@ if __name__ == "__main__":
         'head_camera_image_shape': [1080, 3840], #,[480, 1280], # Head camera resolution
         'head_camera_id_numbers': [6],
         'active_camera_type': 'opencv',
-        'active_camera_image_shape': [720, 2560], # Resolution of active cam
-        'active_camera_id_numbers': [2],
+        'active_camera_image_shape': [720, 1280], # Resolution of active cam
+        'active_camera_id_numbers': [9,11],
         'wrist_camera_type': 'opencv',
         'wrist_camera_image_shape': [480, 640],  # Wrist camera resolution
-        'wrist_camera_id_numbers': [8, 10],
+        'wrist_camera_id_numbers': [2, 4],
     }
 
     server = ImageServer(config, Unit_Test=False)

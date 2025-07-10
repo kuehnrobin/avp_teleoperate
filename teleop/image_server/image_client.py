@@ -274,11 +274,22 @@ class ImageClient:
                     # Decode full resolution active camera image
                     np_img = np.frombuffer(jpg_bytes, dtype=np.uint8)
                     active_image = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
-                    if active_image is not None and self.tv_enable_shm:
-                        # Use full resolution for VR display
-                        if active_image.shape[:2] != (self.tv_img_shape[0], self.tv_img_shape[1]):
-                            active_image = cv2.resize(active_image, (self.tv_img_shape[1], self.tv_img_shape[0]))
-                        np.copyto(self.tv_img_array, active_image)
+                    if active_image is not None:
+                        # Store for shared memory and display
+                        processed_active_image = active_image
+                        if self.tv_enable_shm:
+                            # Use full resolution for VR display
+                            if active_image.shape[:2] != (self.tv_img_shape[0], self.tv_img_shape[1]):
+                                processed_active_image = cv2.resize(active_image, (self.tv_img_shape[1], self.tv_img_shape[0]))
+                            np.copyto(self.tv_img_array, processed_active_image)
+                        
+                        # Display active camera in standalone mode
+                        if self._image_show:
+                            height, width = active_image.shape[:2]
+                            resized_active = cv2.resize(active_image, (width // 2, height // 2))
+                            cv2.imshow('Image Client Active Camera', resized_active)
+                            if cv2.waitKey(1) & 0xFF == ord('q'):
+                                self.running = False
 
                 # Handle concatenated stream (for recording and wrist cameras)
                 if self._socket in socks:
