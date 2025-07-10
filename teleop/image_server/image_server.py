@@ -430,11 +430,12 @@ if __name__ == "__main__":
         'head_camera_id_numbers': [6],
         'active_camera_type': 'opencv',
         'active_camera_image_shape': [720, 1280], # Resolution of active cam
-        'active_camera_id_numbers': [9,11],
+        'active_camera_id_numbers': [12],
         'wrist_camera_type': 'opencv',
         'wrist_camera_image_shape': [480, 640],  # Wrist camera resolution
-        'wrist_camera_id_numbers': [2, 4],
+        'wrist_camera_id_numbers': [8, 10],
     }
 
     server = ImageServer(config, Unit_Test=False)
     server.send_process()
+    
