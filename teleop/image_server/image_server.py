@@ -394,35 +394,26 @@ class ImageServer:
                         return
                     
                     # Apply different rotations and cropping based on camera index
-                    if i == 0:  # Left wrist camera
-                        color_image = cv2.rotate(color_image, cv2.ROTATE_180)
-                    elif i == 1:  # Right wrist camera
-                        # First rotate 90° counterclockwise, then crop/resize to match left camera
-                        color_image = cv2.rotate(color_image, cv2.ROTATE_90_COUNTERCLOCKWISE)
-                        # After rotation: 640x480 -> need to crop to 480x640 to match left camera
-                        h, w = color_image.shape[:2]  # h=640, w=480 after rotation
-                        if h > 480:
-                            # Crop height to 480 (remove excess from top/bottom)
-                            start_y = (h - 480) // 2
-                            color_image = color_image[start_y:start_y+480, :]
-                        if w < 640:
-                            # Need to pad width or resize - let's resize to maintain aspect ratio
-                            color_image = cv2.resize(color_image, (640, 480))
+                    #if i == 0:  # Left wrist camera
+                    color_image = cv2.rotate(color_image, cv2.ROTATE_180)
+                    # elif i == 1:  # Right wrist camera
+                    #     # First rotate 90° counterclockwise, then crop/resize to match left camera
+                    #     color_image = cv2.rotate(color_image, cv2.ROTATE_90_COUNTERCLOCKWISE)
+                    #     # After rotation: 640x480 -> need to crop to 480x640 to match left camera
+                    #     h, w = color_image.shape[:2]  # h=640, w=480 after rotation
+                    #     if h > 480:
+                    #         # Crop height to 480 (remove excess from top/bottom)
+                    #         start_y = (h - 480) // 2
+                    #         color_image = color_image[start_y:start_y+480, :]
+                    #     if w < 640:
+                    #         # Need to pad width or resize - let's resize to maintain aspect ratio
+                    #         color_image = cv2.resize(color_image, (640, 480))
                         
                 elif self.wrist_camera_type == 'realsense':
                     color_image, depth_image = cam.get_frame()
                     if color_image is None:
                         print("[Image Server] Wrist camera frame read is error.")
                         return
-                    # Apply different rotations based on camera index for realsense too
-                    if i == 0:  # Left wrist camera
-                        color_image = cv2.rotate(color_image, cv2.ROTATE_180)
-                    elif i == 1:  # Right wrist camera
-                        color_image = cv2.rotate(color_image, cv2.ROTATE_90_COUNTERCLOCKWISE)
-                        # Handle dimension mismatch for realsense as well if needed
-                        h, w = color_image.shape[:2]
-                        if h != 480 or w != 640:
-                            color_image = cv2.resize(color_image, (640, 480))
                 
                 wrist_frames.append(color_image)
             
