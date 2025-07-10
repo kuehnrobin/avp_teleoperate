@@ -187,12 +187,8 @@ class ImageServer:
         if self.wrist_camera_type and self.wrist_camera_id_numbers:
             if self.wrist_camera_type == 'opencv':
                 for i, device_id in enumerate(self.wrist_camera_id_numbers):
-                    # Right wrist camera (index 1) needs swapped dimensions for 90° rotation
-                    if i == 1:  # Right wrist camera
-                        wrist_shape = [self.wrist_image_shape[1], self.wrist_image_shape[0]]  # [640, 480]
-                    else:  # Left wrist camera
-                        wrist_shape = self.wrist_image_shape  # [480, 640]
-                    camera = OpenCVCamera(device_id=device_id, img_shape=wrist_shape, fps=self.fps)
+                    # Use standard wrist shape for all cameras
+                    camera = OpenCVCamera(device_id=device_id, img_shape=self.wrist_image_shape, fps=self.fps)
                     self.wrist_cameras.append(camera)
             elif self.wrist_camera_type == 'realsense':
                 for serial_number in self.wrist_camera_id_numbers:
@@ -232,9 +228,8 @@ class ImageServer:
                 print("[Image Server] Unknown camera type in active cameras.")
 
         for i, cam in enumerate(self.wrist_cameras):
-            camera_side = "Left" if i == 0 else "Right"
             if isinstance(cam, OpenCVCamera):
-                print(f"[Image Server] {camera_side} wrist camera {cam.id} resolution: {cam.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)} x {cam.cap.get(cv2.CAP_PROP_FRAME_WIDTH)}")
+                print(f"[Image Server] Wrist camera {cam.id} resolution: {cam.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)} x {cam.cap.get(cv2.CAP_PROP_FRAME_WIDTH)}")
             elif isinstance(cam, RealSenseCamera):
                 print(f"[Image Server] Wrist camera {cam.serial_number} resolution: {cam.img_shape[0]} x {cam.img_shape[1]}")
             else:
@@ -397,16 +392,38 @@ class ImageServer:
                     if color_image is None:
                         print("[Image Server] Wrist camera frame read is error.")
                         return
-                    # Apply different rotations based on camera index
+                    
+                    # Apply different rotations and cropping based on camera index
                     if i == 0:  # Left wrist camera
                         color_image = cv2.rotate(color_image, cv2.ROTATE_180)
                     elif i == 1:  # Right wrist camera
-                        color_image = cv2.rotate(color_image, cv2.ROTATE_90_CLOCKWISE)
+                        # First rotate 90° counterclockwise, then crop/resize to match left camera
+                        color_image = cv2.rotate(color_image, cv2.ROTATE_90_COUNTERCLOCKWISE)
+                        # After rotation: 640x480 -> need to crop to 480x640 to match left camera
+                        h, w = color_image.shape[:2]  # h=640, w=480 after rotation
+                        if h > 480:
+                            # Crop height to 480 (remove excess from top/bottom)
+                            start_y = (h - 480) // 2
+                            color_image = color_image[start_y:start_y+480, :]
+                        if w < 640:
+                            # Need to pad width or resize - let's resize to maintain aspect ratio
+                            color_image = cv2.resize(color_image, (640, 480))
+                        
                 elif self.wrist_camera_type == 'realsense':
                     color_image, depth_image = cam.get_frame()
                     if color_image is None:
                         print("[Image Server] Wrist camera frame read is error.")
                         return
+                    # Apply different rotations based on camera index for realsense too
+                    if i == 0:  # Left wrist camera
+                        color_image = cv2.rotate(color_image, cv2.ROTATE_180)
+                    elif i == 1:  # Right wrist camera
+                        color_image = cv2.rotate(color_image, cv2.ROTATE_90_COUNTERCLOCKWISE)
+                        # Handle dimension mismatch for realsense as well if needed
+                        h, w = color_image.shape[:2]
+                        if h != 480 or w != 640:
+                            color_image = cv2.resize(color_image, (640, 480))
+                
                 wrist_frames.append(color_image)
             
             if len(wrist_frames) == len(self.wrist_cameras):
