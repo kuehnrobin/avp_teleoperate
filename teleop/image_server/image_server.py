@@ -386,6 +386,8 @@ class ImageServer:
         # Handle wrist cameras
         if self.wrist_cameras:
             wrist_frames = []
+            target_height, target_width = self.wrist_image_shape  # 480, 640
+            
             for i, cam in enumerate(self.wrist_cameras):
                 if self.wrist_camera_type == 'opencv':
                     color_image = cam.get_frame()
@@ -393,21 +395,15 @@ class ImageServer:
                         print("[Image Server] Wrist camera frame read is error.")
                         return
                     
-                    # Apply different rotations and cropping based on camera index
-                    #if i == 0:  # Left wrist camera
-                    color_image = cv2.rotate(color_image, cv2.ROTATE_180)
-                    # elif i == 1:  # Right wrist camera
-                    #     # First rotate 90° counterclockwise, then crop/resize to match left camera
-                    #     color_image = cv2.rotate(color_image, cv2.ROTATE_90_COUNTERCLOCKWISE)
-                    #     # After rotation: 640x480 -> need to crop to 480x640 to match left camera
-                    #     h, w = color_image.shape[:2]  # h=640, w=480 after rotation
-                    #     if h > 480:
-                    #         # Crop height to 480 (remove excess from top/bottom)
-                    #         start_y = (h - 480) // 2
-                    #         color_image = color_image[start_y:start_y+480, :]
-                    #     if w < 640:
-                    #         # Need to pad width or resize - let's resize to maintain aspect ratio
-                    #         color_image = cv2.resize(color_image, (640, 480))
+                    # Apply different rotations based on camera index
+                    if i == 0:  # Left wrist camera
+                        color_image = cv2.rotate(color_image, cv2.ROTATE_180)
+                    elif i == 1:  # Right wrist camera
+                        color_image = cv2.rotate(color_image, cv2.ROTATE_180)
+                    
+                    # Ensure all cameras have the same final dimensions
+                    # Resize to target dimensions regardless of input size
+                    color_image = cv2.resize(color_image, (target_width, target_height))
                         
                 elif self.wrist_camera_type == 'realsense':
                     color_image, depth_image = cam.get_frame()
