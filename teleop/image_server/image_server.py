@@ -369,8 +369,37 @@ class ImageServer:
                 # # stitch them back side by side
                 # color_image = cv2.hconcat([left_crop, right_crop])
                 # ---------------------------------------
-
-                # Downsample from 1080x3840 to 480x1280
+                
+                # Split stereo image and crop edges from both halves
+                h, w = color_image.shape[:2]  # h=1080, w=3840
+                half_w = w // 2  # 1920 pixels per eye
+                
+                # Crop parameters for each eye
+                crop_w_ratio = 0.8  # Keep 80% of width (remove 10% from each side)
+                crop_h_ratio = 0.8  # Keep 90% of height (remove 5% from top/bottom)
+                
+                new_eye_w = int(half_w * crop_w_ratio)  # 1920 * 0.8 = 1536
+                new_h = int(h * crop_h_ratio)  # 1080 * 0.9 = 972
+                
+                start_x_local = (half_w - new_eye_w) // 2  # Center crop within each eye
+                start_y = (h - new_h) // 2  # Center crop vertically
+                
+                # Crop left eye (first half)
+                left_eye = color_image[
+                    start_y:start_y+new_h,
+                    start_x_local:start_x_local+new_eye_w
+                ]
+                
+                # Crop right eye (second half)
+                right_eye = color_image[
+                    start_y:start_y+new_h,
+                    half_w + start_x_local:half_w + start_x_local + new_eye_w
+                ]
+                
+                # Stitch the cropped eyes back together
+                color_image = cv2.hconcat([left_eye, right_eye])
+                
+                # Downsample the stitched image to target resolution
                 color_image = cv2.resize(color_image, (1280, 480))
 
                 # Rotate the image by 180 degrees for head camera
