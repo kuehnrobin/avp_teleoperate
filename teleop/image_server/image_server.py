@@ -343,30 +343,36 @@ class ImageServer:
                 if color_image is None:
                     print("[Image Server] Head camera frame read is error.")
                     return
+                # Archive: Crop to center of head camera
+                # --------------------------------------
+                # # Head camera: crop to 480×1280 region
+                # h, w = color_image.shape[:2]          # h=1080, w=3840
+                # half_w = w // 2                        # 1920 pixels per eye
+
+                # # crop height
+                # new_h, new_w = 480, 640
+                # start_y = (h - new_h) // 2            # (1080-480)//2 = 300
+                # start_x_local = (half_w - new_w) // 2  # (1920-640)//2 = 640
                 
-                # Head camera: crop to 480×1280 region
-                h, w = color_image.shape[:2]          # h=1080, w=3840
-                half_w = w // 2                        # 1920 pixels per eye
+                # # crop center of left eye
+                # left_crop = color_image[
+                #     start_y:start_y+new_h,
+                #     start_x_local:start_x_local+new_w
+                # ]
 
-                # crop height
-                new_h, new_w = 480, 640
-                start_y = (h - new_h) // 2            # (1080-480)//2 = 300
-                start_x_local = (half_w - new_w) // 2  # (1920-640)//2 = 640
-                
-                # crop center of left eye
-                left_crop = color_image[
-                    start_y:start_y+new_h,
-                    start_x_local:start_x_local+new_w
-                ]
+                # # crop center of right eye
+                # right_crop = color_image[
+                #     start_y:start_y+new_h,
+                #     half_w + start_x_local : half_w + start_x_local + new_w
+                # ]
 
-                # crop center of right eye
-                right_crop = color_image[
-                    start_y:start_y+new_h,
-                    half_w + start_x_local : half_w + start_x_local + new_w
-                ]
+                # # stitch them back side by side
+                # color_image = cv2.hconcat([left_crop, right_crop])
+                # ---------------------------------------
 
-                # stitch them back side by side
-                color_image = cv2.hconcat([left_crop, right_crop])
+                # Downsample from 1080x3840 to 480x1280
+                color_image = cv2.resize(color_image, (1280, 480))
+
                 # Rotate the image by 180 degrees for head camera
                 color_image = cv2.rotate(color_image, cv2.ROTATE_180)
                 
@@ -441,13 +447,13 @@ if __name__ == "__main__":
         'fps': 30,
         'head_camera_type': 'opencv',
         'head_camera_image_shape': [1080, 3840], #,[480, 1280], # Head camera resolution
-        'head_camera_id_numbers': [1],
+        'head_camera_id_numbers': [0],
         'active_camera_type': 'opencv',
         'active_camera_image_shape': [720, 2560], # Resolution of active cam
-        'active_camera_id_numbers': [2],
+        'active_camera_id_numbers': [4],
         'wrist_camera_type': 'opencv',
         'wrist_camera_image_shape': [480, 640],  # Wrist camera resolution
-        'wrist_camera_id_numbers': [5, 7],
+        'wrist_camera_id_numbers': [2, 6],
     }
 
     server = ImageServer(config, Unit_Test=False)
