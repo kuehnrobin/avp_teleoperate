@@ -375,22 +375,22 @@ class ImageServer:
                 half_w = w // 2  # 1920 pixels per eye
                 
                 # Crop parameters for each eye
-                crop_w_ratio = 0.8  # Keep 80% of width (remove 10% from each side)
-                crop_h_ratio = 0.8  # Keep 90% of height (remove 5% from top/bottom)
+                crop_w_ratio = 0.6  # Keep 80% of width (remove 10% from each side)
+                crop_h_ratio = 0.6  # Keep 80% of height (remove from bottom only)
                 
                 new_eye_w = int(half_w * crop_w_ratio)  # 1920 * 0.8 = 1536
-                new_h = int(h * crop_h_ratio)  # 1080 * 0.9 = 972
+                new_h = int(h * crop_h_ratio)  # 1080 * 0.8 = 864
                 
                 start_x_local = (half_w - new_eye_w) // 2  # Center crop within each eye
-                start_y = (h - new_h) // 2  # Center crop vertically
+                start_y = 0  # Start from top (no cropping from top)
                 
-                # Crop left eye (first half)
+                # Crop left eye (first half) - keep top, crop bottom and sides
                 left_eye = color_image[
                     start_y:start_y+new_h,
                     start_x_local:start_x_local+new_eye_w
                 ]
                 
-                # Crop right eye (second half)
+                # Crop right eye (second half) - keep top, crop bottom and sides
                 right_eye = color_image[
                     start_y:start_y+new_h,
                     half_w + start_x_local:half_w + start_x_local + new_eye_w
