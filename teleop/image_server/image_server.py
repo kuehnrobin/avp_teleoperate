@@ -376,7 +376,7 @@ class ImageServer:
                 
                 # Crop parameters for each eye
                 crop_w_ratio = 0.6  # Keep 80% of width (remove 10% from each side)
-                crop_h_ratio = 0.6  # Keep 80% of height (remove from bottom only)
+                crop_h_ratio = 0.7  # Keep 80% of height (remove from bottom only)
                 
                 new_eye_w = int(half_w * crop_w_ratio)  # 1920 * 0.8 = 1536
                 new_h = int(h * crop_h_ratio)  # 1080 * 0.8 = 864
