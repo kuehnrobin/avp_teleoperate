@@ -7,18 +7,22 @@ from collections import deque
 from multiprocessing import shared_memory
 
 class ImageClient:
-    def __init__(self, tv_img_shape = None, tv_img_shm_name = None, wrist_img_shape = None, wrist_img_shm_name = None,
-                 recording_img_shape = None, recording_img_shm_name = None, use_active_camera = False,
-                 active_camera_img_shape = None, active_camera_img_shm_name = None,
+    def __init__(self, vr_img_shape = None, vr_img_shm_name = None, wrist_img_shape = None, wrist_img_shm_name = None,
+                 head_cam_img_shape = None, head_cam_img_shm_name = None, use_active_camera = True,
+                 active_cam_img_shape = None, active_cam_img_shm_name = None,
                  image_show = False, server_address = "192.168.123.164", port = 5555, Unit_Test = False):
         """
-        tv_img_shape: User's expected VR display resolution shape (H, W, C). Can be full active camera or cropped head camera.
+        vr_img_shape: User's expected VR display resolution shape (H, W, C). Can be full active camera or cropped head camera.
 
-        tv_img_shm_name: Shared memory for VR display images.
+        vr_img_shm_name: Shared memory for VR display images.
         
-        recording_img_shape: Recording resolution shape (H, W, C). Always 480x1280 for dataset compatibility.
+        head_cam_img_shape: Head camera resolution shape (H, W, C). Always 480x1280 for dataset compatibility.
         
-        recording_img_shm_name: Shared memory for recording images.
+        head_cam_img_shm_name: Shared memory for head cam images.
+
+        active_cam_img_shape: Active head camera resolution shape (H, W, C). Always 480x1280 for dataset compatibility.
+        
+        active_cam_img_shm_name: Shared memory for active head cam images.
 
         wrist_img_shape: User's expected wrist camera resolution shape (H, W, C).
 
@@ -41,24 +45,24 @@ class ImageClient:
         self._port = port
         self.use_active_camera = use_active_camera
 
-        self.tv_img_shape = tv_img_shape
-        self.recording_img_shape = recording_img_shape
+        self.vr_img_shape = vr_img_shape
+        self.head_cam_img_shape = head_cam_img_shape
         self.wrist_img_shape = wrist_img_shape
-        self.active_camera_img_shape = active_camera_img_shape
+        self.active_cam_img_shape = active_cam_img_shape
 
         # Set up TV/VR display shared memory
-        self.tv_enable_shm = False
-        if self.tv_img_shape is not None and tv_img_shm_name is not None:
-            self.tv_image_shm = shared_memory.SharedMemory(name=tv_img_shm_name)
-            self.tv_img_array = np.ndarray(tv_img_shape, dtype = np.uint8, buffer = self.tv_image_shm.buf)
-            self.tv_enable_shm = True
+        self.vr_enable_shm = False
+        if self.vr_img_shape is not None and vr_img_shm_name is not None:
+            self.vr_image_shm = shared_memory.SharedMemory(name=vr_img_shm_name)
+            self.vr_img_array = np.ndarray(vr_img_shape, dtype = np.uint8, buffer = self.vr_image_shm.buf)
+            self.vr_enable_shm = True
         
-        # Set up recording shared memory
-        self.recording_enable_shm = False
-        if self.recording_img_shape is not None and recording_img_shm_name is not None:
-            self.recording_image_shm = shared_memory.SharedMemory(name=recording_img_shm_name)
-            self.recording_img_array = np.ndarray(recording_img_shape, dtype = np.uint8, buffer = self.recording_image_shm.buf)
-            self.recording_enable_shm = True
+        # Set up head_cam shared memory
+        self.head_cam_enable_shm = False
+        if self.head_cam_img_shape is not None and head_cam_img_shm_name is not None:
+            self.head_camimage_shm = shared_memory.SharedMemory(name=head_cam_img_shm_name)
+            self.head_cam_img_array = np.ndarray(head_cam_img_shape, dtype = np.uint8, buffer = self.head_camimage_shm.buf)
+            self.head_cam_enable_shm = True
         
         # Set up wrist shared memory
         self.wrist_enable_shm = False
@@ -68,11 +72,11 @@ class ImageClient:
             self.wrist_enable_shm = True
 
         # Set up active camera shared memory (separate from recording)
-        self.active_camera_enable_shm = False
-        if self.active_camera_img_shape is not None and active_camera_img_shm_name is not None:
-            self.active_camera_image_shm = shared_memory.SharedMemory(name=active_camera_img_shm_name)
-            self.active_camera_img_array = np.ndarray(active_camera_img_shape, dtype = np.uint8, buffer = self.active_camera_image_shm.buf)
-            self.active_camera_enable_shm = True
+        self.active_cam_enable_shm = False
+        if self.active_cam_img_shape is not None and active_cam_img_shm_name is not None:
+            self.active_cam_image_shm = shared_memory.SharedMemory(name=active_cam_img_shm_name)
+            self.active_cam_img_array = np.ndarray(active_cam_img_shape, dtype = np.uint8, buffer = self.active_cam_image_shm.buf)
+            self.active_cam_enable_shm = True
 
         # Performance evaluation parameters
         self._enable_performance_eval = Unit_Test
@@ -197,7 +201,7 @@ class ImageClient:
                 height, width = current_image.shape[:2]
                 
                 # Extract head/wrist parts
-                if self.wrist_enable_shm and width > 1280:
+                if self.wrist_enable_shm and width > 1280: # TODO Was genau passiert hier?
                     # Image contains both head (480x1280) and wrist cameras
                     head_image = current_image[:, :1280]  # First 1280 pixels are head
                     wrist_image = current_image[:, 1280:]  # Remaining pixels are wrist
@@ -206,17 +210,17 @@ class ImageClient:
                     # Only head camera
                     head_image = current_image
 
-                # Copy to VR display
-                if self.tv_enable_shm:
-                    if head_image.shape[:2] != (self.tv_img_shape[0], self.tv_img_shape[1]):
-                        head_image = cv2.resize(head_image, (self.tv_img_shape[1], self.tv_img_shape[0]))
-                    np.copyto(self.tv_img_array, head_image)
+                # Copy to VR shm for display
+                if self.vr_enable_shm:
+                    if head_image.shape[:2] != (self.vr_img_shape[0], self.vr_img_shape[1]):
+                        head_image = cv2.resize(head_image, (self.vr_img_shape[1], self.vr_img_shape[0]))
+                    np.copyto(self.vr_img_array, head_image)
 
-                # Copy to recording
-                if self.recording_enable_shm:
-                    if head_image.shape[:2] != (self.recording_img_shape[0], self.recording_img_shape[1]):
-                        head_image = cv2.resize(head_image, (self.recording_img_shape[1], self.recording_img_shape[0]))
-                    np.copyto(self.recording_img_array, head_image)
+                # Copy to head cam shm for recording
+                if self.head_cam_enable_shm:
+                    if head_image.shape[:2] != (self.head_cam_img_shape[0], self.head_cam_img_shape[1]):
+                        head_image = cv2.resize(head_image, (self.head_cam_img_shape[1], self.head_cam_img_shape[0]))
+                    np.copyto(self.head_cam_img_array, head_image)
 
                 if self._image_show:
                     height, width = current_image.shape[:2]
@@ -260,10 +264,7 @@ class ImageClient:
         
         # Add small delay to allow connections to establish
         time.sleep(1.0)
-        
-        active_frame_count = 0
-        concat_frame_count = 0
-        
+
         try:
             while self.running:
                 # Poll for messages with longer timeout
@@ -275,10 +276,7 @@ class ImageClient:
                 
                 # Handle full resolution active camera stream (for VR display)
                 if self._active_socket in socks:
-                    #active_frame_count += 1
-                    # if active_frame_count % 30 == 0:
-                    #     print(f"[Image Client] Active camera frames received: {active_frame_count}")
-                    
+
                     message = self._active_socket.recv(zmq.NOBLOCK)
                     receive_time = time.time()
 
@@ -299,19 +297,19 @@ class ImageClient:
                     active_image = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
                     if active_image is not None:
                         # Store for VR display at full resolution
-                        if self.tv_enable_shm:
+                        if self.vr_enable_shm:
                             # Use full resolution for VR display
-                            if active_image.shape[:2] != (self.tv_img_shape[0], self.tv_img_shape[1]):
-                                processed_active_image = cv2.resize(active_image, (self.tv_img_shape[1], self.tv_img_shape[0]))
+                            if active_image.shape[:2] != (self.vr_img_shape[0], self.vr_img_shape[1]):
+                                processed_active_image = cv2.resize(active_image, (self.vr_img_shape[1], self.vr_img_shape[0]))
                             else:
                                 processed_active_image = active_image
-                            np.copyto(self.tv_img_array, processed_active_image)
+                            np.copyto(self.vr_img_array, processed_active_image)
                         
                         # Downscale active camera for recording and put in separate active camera shared memory
-                        if self.active_camera_enable_shm:
+                        if self.active_cam_enable_shm:
                             # Downscale from 720x2560 to 480x1280 for recording
                             active_downscaled = cv2.resize(active_image, (1280, 480))
-                            np.copyto(self.active_camera_img_array, active_downscaled)
+                            np.copyto(self.active_cam_img_array, active_downscaled)
                         
                         # Display active camera in standalone mode
                         if self._image_show:
@@ -323,9 +321,6 @@ class ImageClient:
 
                 # Handle concatenated stream (for recording and wrist cameras)
                 if self._socket in socks:
-                    #concat_frame_count += 1
-                    # if concat_frame_count % 30 == 0:
-                    #     print(f"[Image Client] Concatenated frames received: {concat_frame_count}")
                     
                     message = self._socket.recv(zmq.NOBLOCK)
                     receive_time = time.time()
@@ -350,37 +345,26 @@ class ImageClient:
 
                     height, width = concat_image.shape[:2]
                     
-                    if self.use_active_camera:
-                        # In active camera mode: concatenated stream contains head + wrist, but we only need wrist
-                        # Recording image comes from the separate active camera stream
-                        if self.wrist_enable_shm and width > 1280:
-                            # Image contains both head camera (480x1280) and wrist cameras
-                            wrist_image = concat_image[:, 1280:]  # Remaining pixels are wrist
-                            np.copyto(self.wrist_img_array, wrist_image)
-                        elif self.wrist_enable_shm:
-                            # Fallback: use the whole concatenated image as wrist if no head part
-                            if concat_image.shape[:2] == (self.wrist_img_shape[0], self.wrist_img_shape[1]):
-                                np.copyto(self.wrist_img_array, concat_image)
+
+                    # Concatenated stream contains head + wrist
+                    if self.wrist_enable_shm and width > 1280:
+                        # Image contains both head (480x1280) and wrist cameras
+                        head_image = concat_image[:, :1280]  # First 1280 pixels are head
+                        wrist_image = concat_image[:, 1280:]  # Remaining pixels are wrist
+                        np.copyto(self.wrist_img_array, wrist_image)
+                        
+                        # Put head camera in recording shared memory
+                        if self.head_cam_enable_shm:
+                            if head_image.shape[:2] != (self.head_cam_img_shape[0], self.head_cam_img_shape[1]):
+                                head_image = cv2.resize(head_image, (self.head_cam_img_shape[1], self.head_cam_img_shape[0]))
+                            np.copyto(self.head_cam_img_array, head_image)
                     else:
-                        # In head camera mode: concatenated stream contains head + wrist, extract both
-                        if self.wrist_enable_shm and width > 1280:
-                            # Image contains both head (480x1280) and wrist cameras
-                            head_image = concat_image[:, :1280]  # First 1280 pixels are head
-                            wrist_image = concat_image[:, 1280:]  # Remaining pixels are wrist
-                            np.copyto(self.wrist_img_array, wrist_image)
-                            
-                            # Put head camera in recording shared memory
-                            if self.recording_enable_shm:
-                                if head_image.shape[:2] != (self.recording_img_shape[0], self.recording_img_shape[1]):
-                                    head_image = cv2.resize(head_image, (self.recording_img_shape[1], self.recording_img_shape[0]))
-                                np.copyto(self.recording_img_array, head_image)
-                        else:
-                            # Only head camera
-                            head_image = concat_image
-                            if self.recording_enable_shm:
-                                if head_image.shape[:2] != (self.recording_img_shape[0], self.recording_img_shape[1]):
-                                    head_image = cv2.resize(head_image, (self.recording_img_shape[1], self.recording_img_shape[0]))
-                                np.copyto(self.recording_img_array, head_image)
+                        # Only head camera
+                        head_image = concat_image
+                        if self.head_cam_enable_shm:
+                            if head_image.shape[:2] != (self.head_cam_shape[0], self.head_cam_img_shape[1]):
+                                head_image = cv2.resize(head_image, (self.head_cam_img_shape[1], self.head_cam_img_shape[0]))
+                            np.copyto(self.head_cam_img_array, head_image)
 
                     if self._image_show:
                         height, width = concat_image.shape[:2]
