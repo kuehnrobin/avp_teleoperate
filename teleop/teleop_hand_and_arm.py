@@ -21,7 +21,6 @@ from teleop.robot_control.active_head_cam import ActiveCameraController
 from teleop.image_server.image_client import ImageClient
 from teleop.utils.episode_writer import EpisodeWriter
 from teleop.utils.pose_logger import PoseLogger
-from scipy.spatial.transform import Rotation as R
 
 # Configure logging
 def setup_logging(verbose=False):
@@ -82,7 +81,7 @@ if __name__ == '__main__':
                       help='Disable gradual speed increase')
     
     # Active Camera options
-    parser.add_argument('--active-camera', action='store_true', help='Enable active camera head tracking')
+    parser.add_argument('--active-camera', action='store_true', default=True, help='Enable active camera head tracking')
     parser.add_argument('--camera-port', type=str, default="/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT3R4A5A-if00-port0", 
                        help='Serial port for the active camera servo controller')
     parser.add_argument('--camera-safe-mode', action='store_true', default=False, help='Enable safe mode with limited camera movement')
@@ -124,19 +123,16 @@ if __name__ == '__main__':
         'wrist_camera_image_shape': [480, 640],  # Wrist camera resolution
         'wrist_camera_id_numbers': [8, 10],
     }
-    
-    # Configure VR display and recording resolutions based on active camera selection
+    # Configure VR display resolutions based on active camera selection
     if args.active_camera:
         # Use active camera for VR headset with full resolution
         vr_img_shape = (img_config['active_camera_image_shape'][0], img_config['active_camera_image_shape'][1], 3)  # 720x2560 for VR
-        recording_img_shape = (480, 1280, 3)  # 480x1280 for recording (stereo: 480x640 each)
         logger.info("Using active camera for VR headset with full resolution (720x2560), recording at (480x1280)")
     else:
-        # Use head camera with current cropped implementation
+        # Use head camera
         vr_img_shape = (480, 1280, 3)  # Standard head camera resolution for VR (cropped from 1080x3840)
-        recording_img_shape = (480, 1280, 3)  # Same for recording
         logger.info("Using head camera for VR headset with cropped resolution (480x1280)")
-    
+
     ASPECT_RATIO_THRESHOLD = 2.0 # If the aspect ratio exceeds this value, it is considered binocular
     if len(img_config['head_camera_id_numbers']) > 1 or (vr_img_shape[1] / vr_img_shape[0] > ASPECT_RATIO_THRESHOLD):
         BINOCULAR = True
@@ -149,48 +145,46 @@ if __name__ == '__main__':
     
     # Set up shared memory for VR display (full resolution or cropped)
     if BINOCULAR and not (vr_img_shape[1] / vr_img_shape[0] > ASPECT_RATIO_THRESHOLD):
-        tv_img_shape = (vr_img_shape[0], vr_img_shape[1] * 2, 3)
-    else:
-        tv_img_shape = vr_img_shape
+        vr_img_shape = (vr_img_shape[0], vr_img_shape[1] * 2, 3)
 
-    tv_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(tv_img_shape) * np.uint8().itemsize)
-    tv_img_array = np.ndarray(tv_img_shape, dtype = np.uint8, buffer = tv_img_shm.buf)
+    # 1. tv_shared memory for transmitting the robot's head camera image to the XR device.
+    vr_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(vr_img_shape) * np.uint8().itemsize)
+    vr_img_array = np.ndarray(vr_img_shape, dtype = np.uint8, buffer = vr_img_shm.buf)
 
-    # Set up separate shared memory for recording (always 480x1280 for dataset compatibility)
-    recording_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(recording_img_shape) * np.uint8().itemsize)
-    recording_img_array = np.ndarray(recording_img_shape, dtype = np.uint8, buffer = recording_img_shm.buf)
+    # 2. head_cam_shared memory for recording
+    head_cam_img_shape = (480, 1280, 3)
+    head_cam_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(head_cam_img_shape) * np.uint8().itemsize)
+    head_cam_img_array = np.ndarray(head_cam_img_shape, dtype = np.uint8, buffer = head_cam_img_shm.buf)
 
-    # Set up separate shared memory for active camera (480x1280 for recording)
-    active_camera_img_shm = None
-    active_camera_img_array = None
-    if args.active_camera:
-        active_camera_img_shape = (480, 1280, 3)  # Downscaled active camera for recording
-        active_camera_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(active_camera_img_shape) * np.uint8().itemsize)
-        active_camera_img_array = np.ndarray(active_camera_img_shape, dtype = np.uint8, buffer = active_camera_img_shm.buf)
+    # 3. active camera shared memory for recording
+    active_cam_img_shape = (480, 1280, 3)
+    active_cam_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(active_cam_img_shape) * np.uint8().itemsize)
+    active_cam_img_array = np.ndarray(active_cam_img_shape, dtype = np.uint8, buffer = active_cam_img_shm.buf)
 
     if WRIST:
         wrist_img_shape = (img_config['wrist_camera_image_shape'][0], img_config['wrist_camera_image_shape'][1] * 2, 3)
+        # 4. wrist camera shared memory for recording
         wrist_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(wrist_img_shape) * np.uint8().itemsize)
         wrist_img_array = np.ndarray(wrist_img_shape, dtype = np.uint8, buffer = wrist_img_shm.buf)
         img_client = ImageClient(
-            tv_img_shape = tv_img_shape, 
-            tv_img_shm_name = tv_img_shm.name,
-            recording_img_shape = recording_img_shape,
-            recording_img_shm_name = recording_img_shm.name,
+            vr_img_shape = vr_img_shape, 
+            vr_img_shm_name = vr_img_shm.name,
+            head_cam_img_shape = head_cam_img_shape,
+            head_cam_img_shm_name = head_cam_img_shm.name,
             wrist_img_shape = wrist_img_shape, 
             wrist_img_shm_name = wrist_img_shm.name,
-            active_camera_img_shape = active_camera_img_shape if args.active_camera else None,
-            active_camera_img_shm_name = active_camera_img_shm.name if args.active_camera else None,
+            active_cam_img_shape = active_cam_img_shape if args.active_camera else None,
+            active_came_img_shm_name = active_cam_img_shm.name if args.active_camera else None,
             use_active_camera = args.active_camera
         )
     else:
         img_client = ImageClient(
-            tv_img_shape = tv_img_shape, 
-            tv_img_shm_name = tv_img_shm.name,
-            recording_img_shape = recording_img_shape,
-            recording_img_shm_name = recording_img_shm.name,
-            active_camera_img_shape = active_camera_img_shape if args.active_camera else None,
-            active_camera_img_shm_name = active_camera_img_shm.name if args.active_camera else None,
+            vr_img_shape = vr_img_shape, 
+            vr_img_shm_name = vr_img_shm.name,
+            head_cam_img_shape = head_cam_img_shape,
+            head_cam_img_shm_name = head_cam_img_shm.name,
+            active_cam_img_shape = active_cam_img_shape if args.active_camera else None,
+            active_came_img_shm_name = active_cam_img_shm.name if args.active_camera else None,
             use_active_camera = args.active_camera
         )
 
@@ -200,7 +194,7 @@ if __name__ == '__main__':
     logger.info("Image receive thread started")
 
     # television: obtain hand pose data from the XR device and transmit the robot's head camera image to the XR device.
-    tv_wrapper = TeleVisionWrapper(BINOCULAR, tv_img_shape, tv_img_shm.name, ngrok=True) # True for quest3
+    tv_wrapper = TeleVisionWrapper(BINOCULAR, vr_img_shape, vr_img_shm.name, ngrok=False)
     logger.info("TeleVision wrapper initialized")
 
     # arm
@@ -345,7 +339,7 @@ if __name__ == '__main__':
                 if frame_counter % 300 == 0:  # Every ~10 seconds at 30fps
                     logger.info(f"IK solve time: {(time_ik_end - time_ik_start)*1000:.2f}ms")
 
-                tv_resized_image = cv2.resize(tv_img_array, (tv_img_shape[1] // 2, tv_img_shape[0] // 2))
+                tv_resized_image = cv2.resize(vr_img_array, (vr_img_shape[1] // 2, vr_img_shape[0] // 2))
                 
                 # Add recording status overlay
                 if args.record:
@@ -452,11 +446,11 @@ if __name__ == '__main__':
                     else:
                         print("No dexterous hand set.")
                         pass
-                    # head image (use recording resolution for dataset)
-                    current_recording_image = recording_img_array.copy()
+                    # head image
+                    current_head_cam_image = head_cam_img_array.copy()
                     # active camera image (separate from recording)
-                    if args.active_camera and active_camera_img_array is not None:
-                        current_active_camera_image = active_camera_img_array.copy()
+                    if args.active_camera and active_cam_img_array is not None:
+                        current_active_cam_image = active_cam_img_array.copy()
                     # wrist image
                     if WRIST:
                         current_wrist_image = wrist_img_array.copy()
@@ -499,15 +493,15 @@ if __name__ == '__main__':
                         if args.active_camera:
                             # Active camera mode: split the downscaled active camera image (480x1280) into left/right (480x640 each)
 
-                            colors[f"color_{4}"] = current_active_camera_image[:, :640]   # color_4.jpg - left active camera (480x640)
-                            colors[f"color_{5}"] = current_active_camera_image[:, 640:]   # color_5.jpg - right active camera (480x640)
+                            colors[f"color_{4}"] = current_active_cam_image[:, :640]   # color_4.jpg - left active camera (480x640)
+                            colors[f"color_{5}"] = current_active_cam_image[:, 640:]   # color_5.jpg - right active camera (480x640)
                             
                             # Head camera from recording stream (same as active camera for dataset compatibility)
                             if BINOCULAR:
-                                colors[f"color_{0}"] = current_recording_image[:, :recording_img_shape[1]//2]  # Left eye from downscaled active
-                                colors[f"color_{1}"] = current_recording_image[:, recording_img_shape[1]//2:]  # Right eye from downscaled active
+                                colors[f"color_{0}"] = current_head_cam_image[:, :head_cam_img_shape[1]//2]  # Left eye head camera
+                                colors[f"color_{1}"] = current_head_cam_image[:, head_cam_img_shape[1]//2:]  # Right eye from head camera
                             else:
-                                colors[f"color_{0}"] = current_recording_image  # Full downscaled active camera
+                                colors[f"color_{0}"] = current_head_cam_image
                             
                             # Wrist cameras
                             if WRIST:
@@ -516,13 +510,13 @@ if __name__ == '__main__':
                         else:
                             # Head camera mode: use traditional layout
                             if BINOCULAR:
-                                colors[f"color_{0}"] = current_recording_image[:, :recording_img_shape[1]//2]
-                                colors[f"color_{1}"] = current_recording_image[:, recording_img_shape[1]//2:]
+                                colors[f"color_{0}"] = current_head_cam_image[:, :head_cam_img_shape[1]//2]
+                                colors[f"color_{1}"] = current_head_cam_image[:, head_cam_img_shape[1]//2:]
                                 if WRIST:
                                     colors[f"color_{2}"] = current_wrist_image[:, :wrist_img_shape[1]//2]
                                     colors[f"color_{3}"] = current_wrist_image[:, wrist_img_shape[1]//2:]
                             else:
-                                colors[f"color_{0}"] = current_recording_image
+                                colors[f"color_{0}"] = current_head_cam_image
                                 if WRIST:
                                     colors[f"color_{1}"] = current_wrist_image[:, :wrist_img_shape[1]//2]
                                     colors[f"color_{2}"] = current_wrist_image[:, wrist_img_shape[1]//2:]
@@ -541,13 +535,13 @@ if __name__ == '__main__':
                                 "qpos":   left_hand_state,           
                                 "qvel":   left_hand_vel if isinstance(left_hand_vel, list) else left_hand_vel,                          
                                 "torque": left_hand_torque if isinstance(left_hand_torque, list) else left_hand_torque,                          
-                                "pressures": left_hand_pressures,     # Add pressure data
+                                "pressures": left_hand_pressures,
                             }, 
                             "right_hand": {                                                                    
                                 "qpos":   right_hand_state,       
                                 "qvel":   right_hand_vel if isinstance(right_hand_vel, list) else right_hand_vel,                          
                                 "torque": right_hand_torque if isinstance(right_hand_torque, list) else right_hand_torque, 
-                                "pressures": right_hand_pressures,   # Add pressure data
+                                "pressures": right_hand_pressures,
                             }, 
                             "body": None, # TODO Hier könnte man um den Körper Erweitern
                         }
@@ -636,13 +630,13 @@ if __name__ == '__main__':
         arm_ctrl.ctrl_dual_arm_go_home()
         logger.info("Arms returned to home position")
         
-        tv_img_shm.unlink()
-        tv_img_shm.close()
-        recording_img_shm.unlink()
-        recording_img_shm.close()
-        if args.active_camera and active_camera_img_shm:
-            active_camera_img_shm.unlink()
-            active_camera_img_shm.close()
+        vr_img_shm.unlink()
+        vr_img_shm.close()
+        active_cam_img_shm.unlink()
+        active_cam_img_shm.close()
+        if args.active_camera:
+            active_cam_img_shm.unlink()
+            active_cam_img_shm.close()
         if WRIST:
             wrist_img_shm.unlink()
             wrist_img_shm.close()
