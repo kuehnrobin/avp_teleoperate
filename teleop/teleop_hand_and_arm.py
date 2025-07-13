@@ -174,7 +174,7 @@ if __name__ == '__main__':
             wrist_img_shape = wrist_img_shape, 
             wrist_img_shm_name = wrist_img_shm.name,
             active_cam_img_shape = active_cam_img_shape if args.active_camera else None,
-            active_came_img_shm_name = active_cam_img_shm.name if args.active_camera else None,
+            active_cam_img_shm_name = active_cam_img_shm.name if args.active_camera else None,
             use_active_camera = args.active_camera
         )
     else:
@@ -184,7 +184,7 @@ if __name__ == '__main__':
             head_cam_img_shape = head_cam_img_shape,
             head_cam_img_shm_name = head_cam_img_shm.name,
             active_cam_img_shape = active_cam_img_shape if args.active_camera else None,
-            active_came_img_shm_name = active_cam_img_shm.name if args.active_camera else None,
+            active_cam_img_shm_name = active_cam_img_shm.name if args.active_camera else None,
             use_active_camera = args.active_camera
         )
 
@@ -194,7 +194,7 @@ if __name__ == '__main__':
     logger.info("Image receive thread started")
 
     # television: obtain hand pose data from the XR device and transmit the robot's head camera image to the XR device.
-    tv_wrapper = TeleVisionWrapper(BINOCULAR, vr_img_shape, vr_img_shm.name, ngrok=False)
+    tv_wrapper = TeleVisionWrapper(BINOCULAR, vr_img_shape, vr_img_shm.name, ngrok=True)
     logger.info("TeleVision wrapper initialized")
 
     # arm
