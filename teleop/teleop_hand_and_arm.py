@@ -632,8 +632,8 @@ if __name__ == '__main__':
         
         vr_img_shm.unlink()
         vr_img_shm.close()
-        active_cam_img_shm.unlink()
-        active_cam_img_shm.close()
+        head_cam_img_shm.unlink()
+        head_cam_img_shm.close()
         if args.active_camera:
             active_cam_img_shm.unlink()
             active_cam_img_shm.close()
